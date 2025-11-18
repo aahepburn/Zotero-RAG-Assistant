@@ -2,7 +2,7 @@
 
 import os
 import chromadb
-from backend.pdf_utils import extract_text   # You only need this import
+from backend.pdf import extract_text   # You only need this import
 
 client = chromadb.PersistentClient(path="vector_db/")
 collection = client.get_or_create_collection("library")
