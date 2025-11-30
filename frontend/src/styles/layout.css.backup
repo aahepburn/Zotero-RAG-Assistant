@@ -212,19 +212,43 @@
   background: #faf6f0;
 }
 
-/* Message list container - message styles in globals.css */
+/* Message blocks (less “bubble”, more modern cards) */
 
 .message-list {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  gap: var(--spacing-md);
 }
 
-.message-list__empty {
-  flex: 1;
+.message {
+  width: 100%;
+  padding: var(--spacing-sm) 0; /* vertical spacing only; content spans full width */
+  background: transparent;
+  font-size: 0.95rem;
+  line-height: 1.6;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+}
+
+.message__body {
+  padding: 8px 12px;
+}
+
+.message--user .message__body {
+  border-left: 4px solid var(--accent-focus);
+}
+
+.message--assistant .message__body {
+  border-left: 4px solid var(--accent);
+}
+
+.message__role {
+  font-family: var(--font-serif);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin-bottom: var(--spacing-xs);
 }
 
 /* Chat input */

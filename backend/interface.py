@@ -4,7 +4,7 @@ from backend.zotero_dbase import ZoteroLibrary
 from backend.zoteroitem import ZoteroItem
 from backend.pdf import PDF
 from backend.vector_db import ChromaClient
-from backend.embed_utils import get_embedding
+from backend.embed_utils import get_embedding, rerank_passages
 from backend.local_llm import generate_answer
 import os
 from collections import OrderedDict
@@ -23,17 +23,23 @@ class ZoteroChatbot:
         self.index_progress = {
             "processed_items": 0,
             "total_items": 0,
+            "start_time": None,
+            "elapsed_seconds": 0,
+            "eta_seconds": None,
         }
         self._index_thread = None
     
     def _index_library_worker(self):
         try:
+            start_time = time.time()
+            self.index_progress["start_time"] = start_time
+            
             raw_items = self.zlib.search_parent_items_with_pdfs()
             self.index_progress["total_items"] = len(raw_items)
             self.index_progress["processed_items"] = 0
             items = [ZoteroItem(filepath=it['pdf_path'], metadata=it) for it in raw_items]
 
-            # Extract text for each item using PDF logic
+            # Extract text for each item using PDF logic with page numbers
             for item in items:
                 if self._cancel_indexing:
                     break
@@ -41,22 +47,35 @@ class ZoteroChatbot:
                     self.index_progress["processed_items"] += 1
                     continue  # Skip missing or inaccessible PDFs
                 pdf = PDF(item.filepath)
-                text = pdf.extract_text()
+                # Use page-aware extraction
+                pages_data = pdf.extract_text_with_pages()
+                # Store page data for later chunking
+                item.metadata['pages_data'] = pages_data
+                # Also store concatenated text for backward compatibility
+                text = "\n\n".join([p['text'] for p in pages_data])
                 item.metadata['text'] = text if text else ""
 
-            # Vectorize each item's text (chunk/embedding logic)
+            # Vectorize each item's text (chunk/embedding logic with page tracking)
             for item in items:
                 if self._cancel_indexing:
                     break
-                text = item.metadata.get('text') or ""
-                if not text:
+                pages_data = item.metadata.get('pages_data') or []
+                if not pages_data:
                     self.index_progress["processed_items"] += 1
                     continue
-                chunks = self.chunk_text(text)
-                if not chunks:
+                
+                # Chunk with page awareness
+                chunks_with_pages = self.chunk_text_with_pages(pages_data)
+                if not chunks_with_pages:
                     self.index_progress["processed_items"] += 1
                     continue
+                
+                chunks = [c['text'] for c in chunks_with_pages]
                 vectors = [get_embedding(chunk) for chunk in chunks]
+                
+                # Validate embedding dimensions
+                if vectors and len(vectors[0]) != 768:
+                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}")
 
                 # Generate unique chunk IDs
                 item_id = str(item.metadata.get('item_id'))
@@ -72,7 +91,7 @@ class ZoteroChatbot:
                 pdf_path = meta_src.get("pdf_path") or ""
 
                 metas = []
-                for i in range(len(chunks)):
+                for i, chunk_info in enumerate(chunks_with_pages):
                     metas.append({
                         "item_id": item_id,
                         "chunk_idx": int(i),
@@ -82,6 +101,7 @@ class ZoteroChatbot:
                         "collections": collections,
                         "year": year,
                         "pdf_path": pdf_path,
+                        "page": chunk_info['page'],  # Add page number!
                     })
 
                 self.chroma.add_chunks(
@@ -92,21 +112,170 @@ class ZoteroChatbot:
                 )
                 # Update progress after processing this item
                 self.index_progress["processed_items"] += 1
+                
+                # Calculate time estimates
+                elapsed = time.time() - self.index_progress["start_time"]
+                self.index_progress["elapsed_seconds"] = int(elapsed)
+                
+                processed = self.index_progress["processed_items"]
+                total = self.index_progress["total_items"]
+                if processed > 0 and total > 0:
+                    avg_time_per_item = elapsed / processed
+                    remaining_items = total - processed
+                    self.index_progress["eta_seconds"] = int(avg_time_per_item * remaining_items)
+                
                 # small sleep to allow cancellation to be checked promptly in CPU-bound loops
                 time.sleep(0)
+            
+            # Build BM25 index after adding all chunks
+            print("Building BM25 index for sparse retrieval...")
+            self.chroma.build_bm25_index()
         finally:
             self.is_indexing = False
             self._cancel_indexing = False
 
-    def start_indexing(self):
-        """Start indexing in a background thread. No-op if already indexing."""
+    def _index_library_incremental_worker(self):
+        """Index only new items that aren't already in the database."""
+        try:
+            start_time = time.time()
+            self.index_progress["start_time"] = start_time
+            
+            # Get all items from Zotero
+            raw_items = self.zlib.search_parent_items_with_pdfs()
+            all_item_ids = {str(it['item_id']) for it in raw_items}
+            
+            # Get already indexed item IDs
+            indexed_ids = self.chroma.get_indexed_item_ids()
+            
+            # Find new items
+            new_item_ids = all_item_ids - indexed_ids
+            
+            # Filter to only new items
+            new_items_data = [it for it in raw_items if str(it['item_id']) in new_item_ids]
+            
+            self.index_progress["total_items"] = len(new_items_data)
+            self.index_progress["processed_items"] = 0
+            self.index_progress["skipped_items"] = len(indexed_ids)
+            
+            if len(new_items_data) == 0:
+                print("No new items to index.")
+                return
+            
+            print(f"Found {len(new_items_data)} new items to index (skipping {len(indexed_ids)} already indexed)")
+            
+            items = [ZoteroItem(filepath=it['pdf_path'], metadata=it) for it in new_items_data]
+
+            # Extract text for each new item
+            for item in items:
+                if self._cancel_indexing:
+                    break
+                if not (item.filepath and os.path.exists(item.filepath)):
+                    self.index_progress["processed_items"] += 1
+                    continue
+                pdf = PDF(item.filepath)
+                pages_data = pdf.extract_text_with_pages()
+                item.metadata['pages_data'] = pages_data
+                text = "\n\n".join([p['text'] for p in pages_data])
+                item.metadata['text'] = text if text else ""
+
+            # Vectorize each new item
+            for item in items:
+                if self._cancel_indexing:
+                    break
+                pages_data = item.metadata.get('pages_data') or []
+                if not pages_data:
+                    self.index_progress["processed_items"] += 1
+                    continue
+                
+                chunks_with_pages = self.chunk_text_with_pages(pages_data)
+                if not chunks_with_pages:
+                    self.index_progress["processed_items"] += 1
+                    continue
+                
+                chunks = [c['text'] for c in chunks_with_pages]
+                vectors = [get_embedding(chunk) for chunk in chunks]
+                
+                if vectors and len(vectors[0]) != 768:
+                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}")
+
+                item_id = str(item.metadata.get('item_id'))
+                chunk_ids = [f"{item_id}:{i}" for i in range(len(chunks))]
+
+                meta_src = item.metadata
+                title = meta_src.get("title") or ""
+                authors = meta_src.get("authors") or ""
+                tags = meta_src.get("tags") or ""
+                collections = meta_src.get("collections") or ""
+                year = meta_src.get("date") or ""
+                pdf_path = meta_src.get("pdf_path") or ""
+
+                metas = []
+                for i, chunk_info in enumerate(chunks_with_pages):
+                    metas.append({
+                        "item_id": item_id,
+                        "chunk_idx": int(i),
+                        "title": title,
+                        "authors": authors,
+                        "tags": tags,
+                        "collections": collections,
+                        "year": year,
+                        "pdf_path": pdf_path,
+                        "page": chunk_info['page'],
+                    })
+
+                self.chroma.add_chunks(
+                    ids=chunk_ids,
+                    documents=chunks,
+                    metadatas=metas,
+                    embeddings=vectors
+                )
+                self.index_progress["processed_items"] += 1
+                
+                # Calculate time estimates
+                elapsed = time.time() - self.index_progress["start_time"]
+                self.index_progress["elapsed_seconds"] = int(elapsed)
+                
+                processed = self.index_progress["processed_items"]
+                total = self.index_progress["total_items"]
+                if processed > 0 and total > 0:
+                    avg_time_per_item = elapsed / processed
+                    remaining_items = total - processed
+                    self.index_progress["eta_seconds"] = int(avg_time_per_item * remaining_items)
+                
+                time.sleep(0)
+            
+            # Rebuild BM25 index after adding new chunks
+            if self.index_progress["processed_items"] > 0:
+                print("Rebuilding BM25 index...")
+                self.chroma.build_bm25_index()
+        finally:
+            self.is_indexing = False
+            self._cancel_indexing = False
+    
+    def start_indexing(self, incremental: bool = True):
+        """Start indexing in a background thread. No-op if already indexing.
+        
+        Args:
+            incremental: If True, only index new items. If False, reindex everything.
+        """
         if self.is_indexing:
             return
         self.is_indexing = True
         self._cancel_indexing = False
         # Reset progress
-        self.index_progress = {"processed_items": 0, "total_items": 0}
-        t = threading.Thread(target=self._index_library_worker, daemon=True)
+        self.index_progress = {
+            "processed_items": 0,
+            "total_items": 0,
+            "start_time": None,
+            "elapsed_seconds": 0,
+            "eta_seconds": None,
+            "skipped_items": 0,
+            "mode": "incremental" if incremental else "full",
+        }
+        
+        # Choose worker based on mode
+        worker = self._index_library_incremental_worker if incremental else self._index_library_worker
+        t = threading.Thread(target=worker, daemon=True)
         self._index_thread = t
         t.start()
 
@@ -157,6 +326,61 @@ class ZoteroChatbot:
             chunks.append(current_chunk.strip())
         
         return chunks
+    
+    def chunk_text_with_pages(self, pages_data, chunk_size=800, overlap=200):
+        """Chunk text while preserving page number information.
+        
+        Args:
+            pages_data: List of dicts with 'page_num' and 'text' keys
+            chunk_size: Target chunk size in characters
+            overlap: Overlap between chunks in characters
+            
+        Returns:
+            List of dicts with 'text' and 'page' keys
+        """
+        import re
+        
+        chunks_with_pages = []
+        
+        for page_data in pages_data:
+            page_num = page_data['page_num']
+            text = page_data['text']
+            
+            if not text.strip():
+                continue
+            
+            # Split into sentences
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            
+            current_chunk = ""
+            
+            for sentence in sentences:
+                if len(current_chunk) + len(sentence) <= chunk_size:
+                    current_chunk += sentence + " "
+                else:
+                    # Save current chunk
+                    if current_chunk.strip():
+                        chunks_with_pages.append({
+                            'text': current_chunk.strip(),
+                            'page': page_num
+                        })
+                    
+                    # Start new chunk with overlap
+                    if overlap > 0 and current_chunk:
+                        prev_words = current_chunk.split()
+                        overlap_words = prev_words[-overlap//5:]
+                        current_chunk = " ".join(overlap_words) + " " + sentence + " "
+                    else:
+                        current_chunk = sentence + " "
+            
+            # Add final chunk from this page
+            if current_chunk.strip():
+                chunks_with_pages.append({
+                    'text': current_chunk.strip(),
+                    'page': page_num
+                })
+        
+        return chunks_with_pages
 
     def build_search_prompt(self, user_query: str) -> str:
         """Build an enhanced search query using query expansion.
@@ -213,6 +437,10 @@ class ZoteroChatbot:
             "2. Follow with 3-5 bullet points elaborating on key details, evidence, or perspectives\n"
             "3. If sources disagree, acknowledge different viewpoints\n"
             "4. End with a brief note on limitations or gaps if relevant\n\n"
+            "FORMATTING RULES:\n"
+            "- When using bold text (with **), ALWAYS start it on a new line\n"
+            "- Example: End a sentence with a period.\n\n**Bold Section Title**\n"
+            "- Do NOT write: text continues **Bold Title** on same line\n\n"
             "CITATION RULES:\n"
             "- ALWAYS cite sources using [1], [2], etc. after every factual claim\n"
             "- Use multiple citations [1][2] when several sources support the same point\n"
@@ -233,12 +461,14 @@ class ZoteroChatbot:
 
 
     def chat(self, query, filter_item_ids=None):
-        # 1) Retrieve relevant chunks from Chroma
-        # Best practice: Retrieve more candidates (k=10-20) for better coverage
-        # Then use top 5-8 for context window management
+        # 1) Retrieve relevant chunks using HYBRID search (dense + sparse)
+        # Best practice from Reddit: Combine semantic and keyword matching
+        # Retrieve more candidates (k=15-20), then re-rank and use top 6-8
         db_filter = {"item_id": {"$in": filter_item_ids}} if filter_item_ids else None
         search_prompt = self.build_search_prompt(query)
-        results = self.chroma.query_db(query=search_prompt, k=10, where=db_filter) or {}
+        
+        # Use hybrid search combining dense embeddings + BM25
+        results = self.chroma.query_hybrid(query=search_prompt, k=15, where=db_filter) or {}
 
         docs_outer = results.get("documents", [[]])
         metas_outer = results.get("metadatas", [[]])
@@ -246,8 +476,16 @@ class ZoteroChatbot:
         # Chroma: documents/metadatas are nested lists -> take first inner list
         docs = docs_outer[0] if docs_outer else []
         metas = metas_outer[0] if metas_outer else []
+        
+        # 2) RE-RANK using cross-encoder for better relevance
+        # This is the key improvement from the Reddit thread
+        if docs:
+            ranked = rerank_passages(query, docs, top_k=10)
+            # Reorder docs and metas based on re-ranking scores
+            docs = [docs[idx] for idx, score in ranked]
+            metas = [metas[idx] for idx, score in ranked]
 
-        # 2) Build snippets and citation map
+        # 3) Build snippets and citation map with page numbers
         # Best practice: Prioritize diversity - limit snippets per paper
         snippets = []
         citation_map = OrderedDict()
@@ -260,6 +498,7 @@ class ZoteroChatbot:
             year = meta.get("year") or ""
             authors = meta.get("authors") or ""
             pdf_path = meta.get("pdf_path") or ""
+            page = meta.get("page")  # Now we have page numbers!
             key = (title, year, pdf_path)
 
             # Limit snippets per paper for diversity
@@ -282,6 +521,7 @@ class ZoteroChatbot:
                 "year": year,
                 "authors": authors,
                 "pdf_path": pdf_path,
+                "page": page,  # Include page number
             })
             
             # Limit total snippets for context window
@@ -306,7 +546,7 @@ class ZoteroChatbot:
             for (title, year, pdf_path), cid in citation_map.items()
         ]
 
-        # 3) Call Ollama to synthesize a nice answer
+        # 4) Call Ollama to synthesize a nice answer
         prompt = self.build_answer_prompt(query, snippets)
         try:
             summary = generate_answer(prompt)

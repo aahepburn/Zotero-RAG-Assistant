@@ -14,7 +14,13 @@ Researchers deserve to talk to their own libraries as easily as sending a messag
 
 - **Native Zotero integration:** (Coming soon) Right in your Zotero sidebar, chat with your library without extra setup.
 - **Backend foundation:** FastAPI Python backend that parses, embeds, and indexes your PDFs, notes, and highlights.
-- **Citation-traceable answers:** Every LLM answer is supported with direct references to your actual library items.
+- **Advanced RAG retrieval:** State-of-the-art hybrid search combining:
+  - BGE-base embeddings (768-dim, MTEB #1 ranked)
+  - BM25 sparse retrieval for keyword matching
+  - Cross-encoder re-ranking for precision
+  - Page-aware chunking with full provenance
+- **Citation-traceable answers:** Every LLM answer is supported with direct references to your actual library items with exact page numbers.
+- **Evidence Panel:** See exactly which PDF passages and sources were used to generate each answer, with one-click navigation to Zotero or PDF files. Makes AI responses transparent and verifiable.
 - **Full-text & semantic search:** Search using meaning, not just keywords, across all your literature.
 - **Automatic metadata extraction:** Enriches items with missing DOIs, abstracts, or author info as you index.
 - **Privacy-first:** No data leaves your device; built for offline, local workflows.

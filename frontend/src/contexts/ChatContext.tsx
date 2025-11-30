@@ -44,7 +44,16 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
         zoteroKey: c.zotero_key ?? c.key ?? c.itemKey ?? undefined,
         localPdfPath: c.pdf_path ?? c.filePath ?? c.local_path ?? undefined,
       } as SessionSource));
-      const initialSnippets = (snippets || []).map((s: any) => ({ id: String(s.id ?? s.snippet_id ?? s.key ?? crypto.randomUUID()), sourceId: String(s.citation_id ?? s.citationId ?? s.item_id ?? s.itemId ?? s.source_id ?? ""), text: s.text ?? s.content ?? "" } as SessionSnippet));
+      const initialSnippets = (snippets || []).map((s: any) => ({
+        id: String(s.id ?? s.snippet_id ?? s.key ?? crypto.randomUUID()),
+        sourceId: String(s.citation_id ?? s.citationId ?? s.item_id ?? s.itemId ?? s.source_id ?? ""),
+        text: s.snippet ?? s.text ?? s.content ?? "",
+        locationHint: s.location ?? undefined,
+        page: s.page ?? undefined,
+        title: s.title ?? undefined,
+        authors: s.authors ?? undefined,
+        year: s.year ?? undefined,
+      } as SessionSnippet));
       sessionId = sessions.createSession(userMessage.content, response.summary, initialSources, initialSnippets);
     } else {
       // convert to session Message shape and append to existing session
@@ -66,9 +75,18 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
         sessions.upsertSource(sessionId!, src);
       });
 
-      // add snippets (robust mapping)
+      // add snippets (robust mapping with all metadata fields)
       (snippets || []).forEach((s: any) => {
-        const sn: SessionSnippet = { id: String(s.id ?? s.snippet_id ?? crypto.randomUUID()), sourceId: String(s.citation_id ?? s.citationId ?? s.item_id ?? s.itemId ?? s.source_id ?? ""), text: s.text ?? s.content ?? "", locationHint: s.location ?? undefined } as SessionSnippet;
+        const sn: SessionSnippet = {
+          id: String(s.id ?? s.snippet_id ?? crypto.randomUUID()),
+          sourceId: String(s.citation_id ?? s.citationId ?? s.item_id ?? s.itemId ?? s.source_id ?? ""),
+          text: s.snippet ?? s.text ?? s.content ?? "",
+          locationHint: s.location ?? undefined,
+          page: s.page ?? undefined,
+          title: s.title ?? undefined,
+          authors: s.authors ?? undefined,
+          year: s.year ?? undefined,
+        } as SessionSnippet;
         sessions.addSnippet(sessionId!, sn);
       });
     }

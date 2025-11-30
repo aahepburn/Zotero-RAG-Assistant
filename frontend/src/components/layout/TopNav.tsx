@@ -3,6 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { useSessions } from "../../contexts/SessionsContext";
 import { useChatContext } from "../../contexts/ChatContext";
 
+interface IndexProgress {
+  processed_items?: number;
+  total_items?: number;
+  start_time?: number;
+  elapsed_seconds?: number;
+  eta_seconds?: number | null;
+  skipped_items?: number;
+  mode?: 'incremental' | 'full';
+}
+
+interface IndexStatus {
+  status: string;
+  progress?: IndexProgress;
+}
+
 const IconPanel = ({ children }: { children: React.ReactNode }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     {children}
@@ -74,14 +89,87 @@ const TopNav: React.FC = () => {
   const session = currentSessionId ? getSession(currentSessionId) : null;
   const [editing, setEditing] = useState(false);
   const [reindexing, setReindexing] = useState(false);
-  const [indexStatus, setIndexStatus] = useState<{ status: string; progress?: { processed_items?: number; total_items?: number } } | null>(null);
+  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
+  const [indexStats, setIndexStats] = useState<any>(null);
   const pollRef = React.useRef<number | null>(null);
   const [title, setTitle] = useState(session?.title ?? "Zotero LLM Assistant");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showIndexMenu, setShowIndexMenu] = useState(false);
 
   useEffect(() => {
     setTitle(session?.title ?? "Zotero LLM Assistant");
   }, [session]);
+
+  // Fetch index stats periodically
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const resp = await fetch('/index_stats');
+        const data = await resp.json();
+        setIndexStats(data);
+      } catch (err) {
+        console.error('Failed to fetch index stats', err);
+      }
+    };
+    
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  const startIndexing = async (incremental: boolean) => {
+    if (reindexing) return;
+    try {
+      setReindexing(true);
+      setShowIndexMenu(false);
+      const resp = await fetch("/index_library", { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incremental })
+      });
+      const data = await resp.json();
+      
+      // Start polling status
+      const poll = async () => {
+        try {
+          const r = await fetch('/index_status');
+          const js = await r.json();
+          setIndexStatus(js);
+          if (js?.status === 'indexing') {
+            return false;
+          }
+          // Refresh stats after indexing completes
+          const statsResp = await fetch('/index_stats');
+          const statsData = await statsResp.json();
+          setIndexStats(statsData);
+          return true;
+        } catch (err) {
+          console.error('Failed to fetch index_status', err);
+          return true;
+        }
+      };
+      
+      const done = await poll();
+      if (!done) {
+        pollRef.current = window.setInterval(async () => {
+          const finished = await poll();
+          if (finished) {
+            if (pollRef.current) { 
+              window.clearInterval(pollRef.current); 
+              pollRef.current = null; 
+            }
+            setReindexing(false);
+          }
+        }, 1500) as unknown as number;
+      } else {
+        setReindexing(false);
+      }
+    } catch (e: any) {
+      console.error("Indexing request failed", e);
+      setReindexing(false);
+      setIndexStatus({ status: 'error', progress: undefined });
+    }
+  };
 
   function save() {
     if (!currentSessionId) return setEditing(false);
@@ -229,61 +317,115 @@ const TopNav: React.FC = () => {
           </IconPanel>
         </button>
         <div style={{ width: 8 }} />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <button
-            className="btn"
-            onClick={async () => {
-              if (reindexing) return;
-              try {
-                setReindexing(true);
-                const resp = await fetch("/index_library", { method: "POST" });
-                const data = await resp.json();
-                // start polling status
-                const poll = async () => {
-                  try {
-                    const r = await fetch('/index_status');
-                    const js = await r.json();
-                    setIndexStatus(js);
-                    if (js?.status === 'indexing') {
-                      // continue
-                      return false;
-                    }
-                    return true;
-                  } catch (err) {
-                    console.error('Failed to fetch index_status', err);
-                    return true;
-                  }
-                };
-                // first immediate poll
-                const done = await poll();
-                if (!done) {
-                  pollRef.current = window.setInterval(async () => {
-                    const finished = await poll();
-                    if (finished) {
-                      if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
-                      setReindexing(false);
-                    }
-                  }, 1500) as unknown as number;
-                } else {
-                  // already done
-                  setReindexing(false);
-                }
-              } catch (e: any) {
-                console.error("Indexing request failed", e);
-                setReindexing(false);
-                setIndexStatus({ status: 'error', progress: undefined });
-              }
-            }}
-            title="Rebuild index"
-          >
-            {reindexing ? "Indexing…" : "Reindex"}
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', position: 'relative' }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button
+              className="btn"
+              onClick={() => startIndexing(true)}
+              disabled={reindexing}
+              title={indexStats?.new_items > 0 ? `Sync ${indexStats.new_items} new item${indexStats.new_items !== 1 ? 's' : ''}` : "Sync new items"}
+            >
+              {reindexing ? "Indexing…" : indexStats?.new_items > 0 ? `Sync (${indexStats.new_items})` : "Sync"}
+            </button>
+            <button
+              className="btn"
+              onClick={() => setShowIndexMenu(!showIndexMenu)}
+              disabled={reindexing}
+              title="Index options"
+              style={{ padding: '4px 8px' }}
+            >
+              ▾
+            </button>
+          </div>
+          
+          {showIndexMenu && (
+            <>
+              <div 
+                style={{ position: 'fixed', inset: 0, zIndex: 79 }} 
+                onClick={() => setShowIndexMenu(false)} 
+              />
+              <div style={{
+                position: 'absolute',
+                top: '40px',
+                right: 0,
+                background: 'var(--bg-panel)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 8,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                minWidth: 200,
+                zIndex: 80,
+                overflow: 'hidden'
+              }}>
+                <button
+                  onClick={() => startIndexing(true)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: 14
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ fontWeight: 500 }}>Sync New Items</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                    {indexStats?.new_items > 0 
+                      ? `Index ${indexStats.new_items} new item${indexStats.new_items !== 1 ? 's' : ''}`
+                      : 'Only index items not yet in database'}
+                  </div>
+                </button>
+                <div style={{ height: 1, background: 'var(--border)' }} />
+                <button
+                  onClick={() => startIndexing(false)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: 14
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ fontWeight: 500 }}>Full Reindex</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                    Rebuild entire index from scratch
+                  </div>
+                </button>
+                {indexStats && (
+                  <>
+                    <div style={{ height: 1, background: 'var(--border)' }} />
+                    <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--muted)' }}>
+                      <div>Indexed: {indexStats.indexed_items} items</div>
+                      <div>Chunks: {indexStats.total_chunks}</div>
+                      <div>Library: {indexStats.zotero_items} items</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
 
           {/* Progress bar + status */}
           {indexStatus && (
             <div style={{ width: 220, marginTop: 6 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-                {indexStatus.status === 'indexing' ? 'Indexing…' : indexStatus.status === 'idle' ? 'Index idle' : indexStatus.status}
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>
+                  {indexStatus.status === 'indexing' ? 'Indexing…' : indexStatus.status === 'idle' ? 'Index idle' : indexStatus.status}
+                </span>
+                {indexStatus.status === 'indexing' && indexStatus.progress?.eta_seconds != null && indexStatus.progress.eta_seconds > 0 && (
+                  <span style={{ fontSize: 11 }}>
+                    {indexStatus.progress.eta_seconds < 60 
+                      ? `~${indexStatus.progress.eta_seconds}s`
+                      : `~${Math.ceil(indexStatus.progress.eta_seconds / 60)}m`}
+                  </span>
+                )}
               </div>
               <div style={{ height: 8, background: 'var(--border-subtle)', borderRadius: 4, overflow: 'hidden' }}>
                 {indexStatus.progress && indexStatus.progress.total_items ? (
@@ -293,6 +435,16 @@ const TopNav: React.FC = () => {
                   <div style={{ height: '100%', width: '100%', background: 'repeating-linear-gradient(-45deg, rgba(0,0,0,0.08) 0, rgba(0,0,0,0.02) 10px)' }} />
                 )}
               </div>
+              {indexStatus.status === 'indexing' && indexStatus.progress && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                  {indexStatus.progress.processed_items ?? 0} / {indexStatus.progress.total_items ?? 0} items
+                  {indexStatus.progress.mode === 'incremental' && indexStatus.progress.skipped_items > 0 && (
+                    <span style={{ marginLeft: 8 }}>
+                      ({indexStatus.progress.skipped_items} already indexed)
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

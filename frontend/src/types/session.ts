@@ -1,4 +1,13 @@
-export type Snippet = { id: string; sourceId: string; text: string; locationHint?: string };
+export type Snippet = {
+  id: string;
+  sourceId: string;
+  text: string;
+  locationHint?: string;
+  page?: number | string;
+  title?: string;
+  authors?: string;
+  year?: string | number;
+};
 
 export type SourceRef = {
   id: string;

@@ -99,12 +99,19 @@ def get_reviews(query: str):
         return {"error": str(e)}
 
 @app.post("/index_library")
-def index_library():
-    """Index all Zotero parent items and PDFs in the vector database."""
+def index_library(payload: dict = Body(default={"incremental": True})):
+    """Index Zotero parent items and PDFs in the vector database.
+    
+    Args:
+        payload: JSON with optional "incremental" boolean (default: True)
+                 - True: Only index new items not already in the database
+                 - False: Full reindex of all items
+    """
     try:
-        # Start background indexing and return immediately
-        chatbot.start_indexing()
-        return {"msg": "Indexing started."}
+        incremental = payload.get("incremental", True)
+        chatbot.start_indexing(incremental=incremental)
+        mode = "incremental" if incremental else "full"
+        return {"msg": f"Indexing started ({mode} mode)."}
     except Exception as e:
         return {"error": str(e)}
 
@@ -153,8 +160,21 @@ def chat_post(payload: dict = Body(...)):
         payload_out = chatbot.chat(query, filter_item_ids=filter_ids if filter_ids else None)
         return payload_out
     except Exception as e:
+        error_msg = str(e)
+        
+        # Provide helpful error messages for common issues
+        if "embedding with dimension" in error_msg.lower():
+            return {
+                "error": "Database configuration error: Embedding dimension mismatch detected. "
+                        "This usually means your database was created with a different embedding model. "
+                        "Please delete the vector database and re-index your library. "
+                        "Run: rm -rf " + CHROMA_PATH + " then use the Index Library button.",
+                "technical_details": error_msg,
+                "traceback": traceback.format_exc()
+            }
+        
         tb = traceback.format_exc()
-        return {"error": str(e), "traceback": tb}
+        return {"error": error_msg, "traceback": tb}
 
 
 @app.get("/index_status")
@@ -166,6 +186,53 @@ def index_status():
         status = "indexing" if getattr(chatbot, "is_indexing", False) else "idle"
         progress = getattr(chatbot, "index_progress", None) or {}
         return {"status": status, "progress": progress}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/db_health")
+def db_health():
+    """Check the health and configuration of the vector database.
+    Validates that embedding dimensions are consistent.
+    """
+    try:
+        validation = chatbot.chroma.validate_embedding_dimension()
+        return validation
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/index_stats")
+def index_stats():
+    """Get statistics about the indexed library.
+    
+    Returns:
+        - indexed_items: Number of unique items in the database
+        - total_chunks: Total number of text chunks indexed
+        - zotero_items: Total number of items in Zotero library with PDFs
+        - new_items: Number of items in Zotero not yet indexed
+    """
+    try:
+        # Get indexed item IDs
+        indexed_ids = chatbot.chroma.get_indexed_item_ids()
+        
+        # Get total chunks
+        total_chunks = chatbot.chroma.get_document_count()
+        
+        # Get all Zotero items
+        raw_items = chatbot.zlib.search_parent_items_with_pdfs()
+        zotero_item_ids = {str(it['item_id']) for it in raw_items}
+        
+        # Calculate new items
+        new_item_ids = zotero_item_ids - indexed_ids
+        
+        return {
+            "indexed_items": len(indexed_ids),
+            "total_chunks": total_chunks,
+            "zotero_items": len(zotero_item_ids),
+            "new_items": len(new_item_ids),
+            "needs_sync": len(new_item_ids) > 0
+        }
     except Exception as e:
         return {"error": str(e)}
 

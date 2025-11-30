@@ -42,3 +42,5 @@ export const Spinner: React.FC<SpinnerProps> = ({ size = "md" }) => {
     </svg>
   );
 };
+
+export default Spinner;

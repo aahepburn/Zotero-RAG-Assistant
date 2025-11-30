@@ -36,8 +36,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       try {
         const response = await fetch('/settings');
         if (response.ok) {
-          const data = await response.json();
-          setSettings(data);
+          const text = await response.text();
+          try {
+            const data = JSON.parse(text);
+            setSettings(data);
+          } catch (parseErr) {
+            console.error('Failed to parse settings JSON:', parseErr);
+            setError('Failed to parse settings. Using defaults.');
+            // Fall back to defaults
+            setSettings(defaultSettings);
+          }
+        } else {
+          console.error('Settings request failed:', response.status);
+          setError('Failed to load settings from server');
         }
       } catch (err) {
         console.error('Failed to load settings:', err);

@@ -1,4 +1,5 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
 import type { ChatMessage } from "../../types/domain";
 import { Spinner } from "../../components/ui/Spinner";
 
@@ -7,19 +8,144 @@ interface Props {
   loading: boolean;
 }
 
-function formatMessageWithCitations(content: string): React.ReactNode {
-  // Replace citation numbers like [1] with styled spans
-  const parts = content.split(/(\[\d+\])/g);
-  return parts.map((part, i) => {
-    if (/^\[\d+\]$/.test(part)) {
-      return (
-        <sup key={i} className="citation-ref">
-          {part}
-        </sup>
-      );
+function formatMessageWithCitations(content: string | undefined): React.ReactNode {
+  // Handle undefined or empty content
+  if (!content) {
+    return <span>No response available</span>;
+  }
+  
+  // Pre-process content to fix markdown formatting issues
+  let processedContent = content;
+  
+  // Fix broken bold tags split across lines: "**Title\n\n**" -> "**Title**"
+  processedContent = processedContent.replace(/\*\*([^\n*]+)\n+\*\*/g, '**$1**');
+  
+  // Fix bold tags with only newlines between: "**\n\nTitle\n\n**" -> "**Title**"
+  processedContent = processedContent.replace(/\*\*\s*\n+\s*([^\n*]+?)\s*\n+\s*\*\*/g, '**$1**');
+  
+  // Fix orphaned opening bold tags at end of line followed by closing tag
+  processedContent = processedContent.replace(/\*\*\s*\n+([^*\n]+)\*\*/g, '**$1**');
+  processedContent = processedContent.replace(/\*\*([^*\n]+)\s*\n+\*\*/g, '**$1**');
+  
+  // Ensure proper spacing before AND after bold headings
+  // Before: Add double newline before bold text (but not at start of message)
+  processedContent = processedContent.replace(/([^\n])\n(\*\*[^*]+\*\*)/g, '$1\n\n$2');
+  processedContent = processedContent.replace(/^([^\n*])(\*\*[^*]+\*\*)/gm, '$1\n\n$2');
+  
+  // After: Add double newline after bold text (but not if already followed by newlines)
+  processedContent = processedContent.replace(/(\*\*[^*]+\*\*)([^\n])/g, '$1\n\n$2');
+  
+  // Custom renderer that handles citations inline without breaking flow
+  const renderContentWithCitations = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    
+    // Match citation patterns [1], [2][3], etc.
+    const citationRegex = /\[\d+\](?:\[\d+\])*/g;
+    let match: RegExpExecArray | null;
+    
+    while ((match = citationRegex.exec(text)) !== null) {
+      const currentMatch = match; // Create a const reference for TypeScript
+      
+      // Add text before citation
+      if (currentMatch.index > lastIndex) {
+        parts.push(text.substring(lastIndex, currentMatch.index));
+      }
+      
+      // Add citations as superscripts
+      const citations = currentMatch[0].match(/\[\d+\]/g) || [];
+      citations.forEach((cite, idx) => {
+        parts.push(
+          <sup key={`cite-${currentMatch.index}-${idx}`} className="citation-ref">
+            {cite}
+          </sup>
+        );
+      });
+      
+      lastIndex = currentMatch.index + currentMatch[0].length;
     }
-    return <span key={i}>{part}</span>;
-  });
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    
+    return parts;
+  };
+  
+  return (
+    <ReactMarkdown
+      components={{
+        // Paragraph handling - render inline content properly
+        p: ({node, children, ...props}) => {
+          // Process children to handle citations
+          const processedChildren = React.Children.map(children, (child) => {
+            if (typeof child === 'string') {
+              return renderContentWithCitations(child);
+            }
+            return child;
+          });
+          return <p {...props}>{processedChildren}</p>;
+        },
+        // Headings with proper spacing
+        h1: ({node, children, ...props}) => {
+          const processedChildren = React.Children.map(children, (child) => {
+            if (typeof child === 'string') {
+              return renderContentWithCitations(child);
+            }
+            return child;
+          });
+          return <h1 {...props}>{processedChildren}</h1>;
+        },
+        h2: ({node, children, ...props}) => {
+          const processedChildren = React.Children.map(children, (child) => {
+            if (typeof child === 'string') {
+              return renderContentWithCitations(child);
+            }
+            return child;
+          });
+          return <h2 {...props}>{processedChildren}</h2>;
+        },
+        h3: ({node, children, ...props}) => {
+          const processedChildren = React.Children.map(children, (child) => {
+            if (typeof child === 'string') {
+              return renderContentWithCitations(child);
+            }
+            return child;
+          });
+          return <h3 {...props}>{processedChildren}</h3>;
+        },
+        // Strong (bold) with citation support
+        strong: ({node, children, ...props}) => {
+          const processedChildren = React.Children.map(children, (child) => {
+            if (typeof child === 'string') {
+              return renderContentWithCitations(child);
+            }
+            return child;
+          });
+          return <strong {...props}>{processedChildren}</strong>;
+        },
+        em: ({node, ...props}) => <em {...props} />,
+        code: ({node, ...props}) => <code {...props} />,
+        pre: ({node, ...props}) => <pre {...props} />,
+        ul: ({node, ...props}) => <ul {...props} />,
+        ol: ({node, ...props}) => <ol {...props} />,
+        li: ({node, children, ...props}) => {
+          const processedChildren = React.Children.map(children, (child) => {
+            if (typeof child === 'string') {
+              return renderContentWithCitations(child);
+            }
+            return child;
+          });
+          return <li {...props}>{processedChildren}</li>;
+        },
+        blockquote: ({node, ...props}) => <blockquote {...props} />,
+        a: ({node, ...props}) => <a target="_blank" rel="noopener noreferrer" {...props} />,
+      }}
+    >
+      {processedContent}
+    </ReactMarkdown>
+  );
 }
 
 const ChatMessages: React.FC<Props> = ({ messages, loading }) => {

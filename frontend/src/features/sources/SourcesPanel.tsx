@@ -92,30 +92,34 @@ const SourcesPanel: React.FC = () => {
             <div style={{ marginBottom: 8 }} className="muted">Showing sources from latest response (session not populated)</div>
           )}
           {(session.sources.length > 0 ? session.sources : (chat?.lastResponse?.citations ?? []).map((c: any) => ({ id: String(c.id), title: c.title, authors: c.authors, year: c.year ? String(c.year) : undefined, zoteroKey: c.zoteroKey, localPdfPath: c.pdf_path }))).map((s: any, index: number) => (
-            <div key={s.id} style={{ padding: 12, borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "flex-start", gap: "12px" }}>
-              <div style={{ 
-                minWidth: "28px", 
-                height: "28px", 
-                borderRadius: "50%", 
-                background: "var(--accent)", 
-                color: "white", 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                fontSize: "14px", 
-                fontWeight: 600,
-                flexShrink: 0
-              }}>
-                {s.id || index + 1}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, marginBottom: "4px" }}>{s.title}</div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {s.authors ? s.authors.split(",")[0].trim() + (s.authors.split(",").length > 1 ? " et al." : "") : "Unknown author"}
-                  {s.year ? ` • ${s.year}` : ""}
+            <div key={s.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+              {/* Top section: metadata */}
+              <div style={{ padding: 12, display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                <div style={{ 
+                  minWidth: "28px", 
+                  height: "28px", 
+                  borderRadius: "50%", 
+                  background: "var(--accent)", 
+                  color: "white", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  fontSize: "14px", 
+                  fontWeight: 600,
+                  flexShrink: 0
+                }}>
+                  {s.id || index + 1}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{s.title}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {s.authors ? s.authors.split(",")[0].trim() + (s.authors.split(",").length > 1 ? " et al." : "") : "Unknown author"}
+                    {s.year ? ` • ${s.year}` : ""}
+                  </div>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {/* Bottom section: action buttons */}
+              <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-panel-alt, #fafafa)", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   className="btn"
                   title="Open PDF"

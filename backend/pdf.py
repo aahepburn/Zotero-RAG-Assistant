@@ -79,6 +79,24 @@ class PDF:
         self.doc.close()
         return text_chunks  # list of strings, one per page
     
+    def extract_text_with_pages(self):
+        """Extract text from PDF with page numbers preserved.
+        
+        Returns:
+            List of dicts with 'page_num' and 'text' keys
+        """
+        self.doc = fitz.open(self.filepath)
+        pages_data = []
+        for i, page in enumerate(self.doc):
+            text = page.get_text()
+            if text.strip():  # Only include pages with text
+                pages_data.append({
+                    'page_num': i + 1,  # 1-indexed page numbers
+                    'text': text
+                })
+        self.doc.close()
+        return pages_data
+    
     def get_annotations(self):
         self.doc = fitz.open(self.filepath)
         annots = []

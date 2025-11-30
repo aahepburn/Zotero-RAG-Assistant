@@ -10,8 +10,13 @@ export interface Snippet {
   id: string;
   citation_id?: number;
   item_id?: string;
-  text: string;
-  title?: string;
+  snippet: string; // The actual text chunk from the document
+  text?: string; // Alias for backward compatibility
+  title: string;
+  authors?: string;
+  year?: string | number;
+  page?: number | string;
+  zoteroKey?: string;
   pdf_path?: string;
 }
 
