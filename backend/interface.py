@@ -116,56 +116,117 @@ class ZoteroChatbot:
             return
         self._cancel_indexing = True
 
-    def chunk_text(self, text, chunk_size=512, overlap=64):
-        # Naive chunking function
-        chunks = []
+    def chunk_text(self, text, chunk_size=800, overlap=200):
+        """Improved chunking with semantic boundary awareness.
+        
+        Best practices for academic documents:
+        - Larger chunks (600-1000 tokens) preserve context better for research papers
+        - Higher overlap (150-250 tokens) ensures key concepts aren't split
+        - Try to break at sentence boundaries when possible
+        """
         if not text:
-            return chunks
-        step = max(1, chunk_size - overlap)
-        for i in range(0, len(text), step):
-            chunks.append(text[i:i+chunk_size])
+            return []
+        
+        # Split into sentences first (naive approach)
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        chunks = []
+        current_chunk = ""
+        
+        for sentence in sentences:
+            # If adding this sentence keeps us under chunk_size, add it
+            if len(current_chunk) + len(sentence) <= chunk_size:
+                current_chunk += sentence + " "
+            else:
+                # Save current chunk if it's not empty
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                
+                # Start new chunk
+                # Include overlap from previous chunk
+                if chunks and overlap > 0:
+                    prev_words = current_chunk.split()
+                    overlap_words = prev_words[-overlap//5:]  # rough word-based overlap
+                    current_chunk = " ".join(overlap_words) + " " + sentence + " "
+                else:
+                    current_chunk = sentence + " "
+        
+        # Add final chunk
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
         return chunks
 
     def build_search_prompt(self, user_query: str) -> str:
+        """Build an enhanced search query using query expansion.
+        
+        Best practice: Transform natural questions into search-optimized queries
+        that better match academic content.
+        """
         base = user_query.strip()
-        if not base.endswith("?"):
-            base += "?"
-        return (
-            "You are a professional research assistant. Answer this question using my Zotero papers as sources. "
-            "Focus on concise, factual explanation suitable for an academic summary. "
-            f"Question: {base}"
-        )
+        # Keep the original query for semantic matching
+        # The embedding model will handle the expansion naturally
+        return base
 
     def build_answer_prompt(self, question: str, snippets: list[dict]) -> str:
-        # Prompt that will be sent to Ollama
+        """Build an optimized prompt for academic question answering.
+        
+        Best practices for academic RAG:
+        - Clear role and constraints
+        - Explicit citation requirements
+        - Structured output format
+        - Encourage critical analysis
+        - Handle uncertainty appropriately
+        """
         if not snippets:
             return (
-                "You are an academic assistant. The user asked a question, "
-                "but there is no relevant context from their Zotero library. "
-                "Explain that you cannot answer from their papers and suggest they add relevant articles.\n\n"
-                f"Question: {question}"
+                "You are an academic research assistant. The user asked the following question, "
+                "but no relevant passages were found in their Zotero library.\n\n"
+                f"Question: {question}\n\n"
+                "Respond politely that you cannot find relevant information in their library for this question. "
+                "Suggest they may need to: (1) add relevant papers to their library, or (2) rephrase the question "
+                "to better match their existing papers."
             )
 
+        # Build rich context with metadata
         context_blocks = []
         for s in snippets:
             cid = s["citation_id"]
             title = s.get("title", "Untitled")
             year = s.get("year", "")
+            authors = s.get("authors", "Unknown")  # Get authors if available
             txt = s.get("snippet", "")
-            context_blocks.append(f"[{cid}] {title} ({year}): {txt}")
+            
+            # Include bibliographic context
+            bib = f"{authors} ({year})" if year else authors
+            context_blocks.append(f"[{cid}] {title}\n{bib}\n{txt}")
 
         context = "\n\n".join(context_blocks)
+        
         return (
-            "You are a professional research assistant answering questions using ONLY the context below, "
-            "taken from the user's Zotero library.\n"
-            "Write a clear, readable answer with:\n"
-            "- 1–2 sentences that directly answer the question.\n"
-            "- Then 2–4 short bullet points highlighting key details.\n"
-            "When you state a fact, cite the supporting sources using their IDs in brackets, e.g., [1]. "
-            "If the answer is not in the context, explicitly say you cannot answer from these papers.\n\n"
-            f"Question: {question}\n\n"
-            f"Context:\n{context}\n\n"
-            "Answer:"
+            "You are an expert research assistant helping an academic researcher understand their literature.\n\n"
+            "TASK: Answer the question below using ONLY the provided excerpts from the researcher's library. "
+            "Synthesize information across sources when possible.\n\n"
+            "RESPONSE FORMAT:\n"
+            "1. Start with a direct answer (2-3 sentences) that addresses the core question\n"
+            "2. Follow with 3-5 bullet points elaborating on key details, evidence, or perspectives\n"
+            "3. If sources disagree, acknowledge different viewpoints\n"
+            "4. End with a brief note on limitations or gaps if relevant\n\n"
+            "CITATION RULES:\n"
+            "- ALWAYS cite sources using [1], [2], etc. after every factual claim\n"
+            "- Use multiple citations [1][2] when several sources support the same point\n"
+            "- Never make claims without supporting citations from the context\n"
+            "- If the context doesn't fully answer the question, explicitly state what's missing\n\n"
+            "CRITICAL REQUIREMENTS:\n"
+            "- Do NOT use outside knowledge - only cite what's in the context\n"
+            "- Do NOT speculate or extrapolate beyond what sources explicitly state\n"
+            "- If sources are insufficient, say so clearly\n\n"
+            "---\n\n"
+            f"QUESTION: {question}\n\n"
+            f"CONTEXT FROM LIBRARY:\n\n{context}\n\n"
+            "---\n\n"
+            "ANSWER:"
         )
 
 
@@ -173,9 +234,11 @@ class ZoteroChatbot:
 
     def chat(self, query, filter_item_ids=None):
         # 1) Retrieve relevant chunks from Chroma
+        # Best practice: Retrieve more candidates (k=10-20) for better coverage
+        # Then use top 5-8 for context window management
         db_filter = {"item_id": {"$in": filter_item_ids}} if filter_item_ids else None
         search_prompt = self.build_search_prompt(query)
-        results = self.chroma.query_db(query=search_prompt, k=5, where=db_filter) or {}
+        results = self.chroma.query_db(query=search_prompt, k=10, where=db_filter) or {}
 
         docs_outer = results.get("documents", [[]])
         metas_outer = results.get("metadatas", [[]])
@@ -185,34 +248,59 @@ class ZoteroChatbot:
         metas = metas_outer[0] if metas_outer else []
 
         # 2) Build snippets and citation map
+        # Best practice: Prioritize diversity - limit snippets per paper
         snippets = []
         citation_map = OrderedDict()
+        paper_snippet_count = {}  # Track snippets per paper
+        max_snippets_per_paper = 3
 
         for doc, meta in zip(docs, metas):
             # meta is a dict here
             title = meta.get("title") or "Untitled"
             year = meta.get("year") or ""
+            authors = meta.get("authors") or ""
             pdf_path = meta.get("pdf_path") or ""
             key = (title, year, pdf_path)
+
+            # Limit snippets per paper for diversity
+            paper_id = f"{title}_{year}"
+            if paper_snippet_count.get(paper_id, 0) >= max_snippets_per_paper:
+                continue
+            
+            paper_snippet_count[paper_id] = paper_snippet_count.get(paper_id, 0) + 1
 
             if key not in citation_map:
                 citation_map[key] = len(citation_map) + 1  # 1-based index
 
             cid = citation_map[key]
-            snippet_text = (doc or "")[:500]  # give the LLM a bit more context
+            # Keep full chunk for academic context (don't truncate too much)
+            snippet_text = (doc or "")[:800]
             snippets.append({
                 "citation_id": cid,
                 "snippet": snippet_text,
                 "title": title,
                 "year": year,
+                "authors": authors,
                 "pdf_path": pdf_path,
             })
+            
+            # Limit total snippets for context window
+            if len(snippets) >= 6:
+                break
 
+        # Build citations list with authors - need to get from snippets
+        citation_to_authors = {}
+        for s in snippets:
+            key = (s["title"], s["year"], s["pdf_path"])
+            if key not in citation_to_authors:
+                citation_to_authors[key] = s["authors"]
+        
         citations = [
             {
                 "id": cid,
                 "title": title,
                 "year": year,
+                "authors": citation_to_authors.get((title, year, pdf_path), ""),
                 "pdf_path": pdf_path,
             }
             for (title, year, pdf_path), cid in citation_map.items()

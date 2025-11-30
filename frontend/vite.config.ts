@@ -17,6 +17,18 @@ export default defineConfig({
       "/index_status": {
         target: "http://localhost:8000",
         changeOrigin: true
+      },
+      "/open_pdf": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/search_items": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/ollama_status": {
+        target: "http://localhost:8000",
+        changeOrigin: true
       }
     }
   }

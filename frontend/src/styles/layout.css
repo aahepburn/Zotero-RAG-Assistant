@@ -1,11 +1,95 @@
 @import "./theme.css";
 
+:root {
+  --nav-height: 64px;
+}
+
+.top-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,246,240,0.95));
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  z-index: 60;
+}
+
+.top-nav__left,
+.top-nav__center,
+.top-nav__right {
+  display: flex;
+  align-items: center;
+}
+
+.top-nav__center {
+  flex: 1;
+  justify-content: center;
+}
+
+.top-nav__title {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.top-nav__title-input {
+  font-size: 1rem;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 2.7fr) minmax(0, 2fr);
-  grid-template-rows: 100vh;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
+  grid-template-rows: 1fr;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  padding-top: calc(var(--nav-height) + var(--spacing-xl));
+  height: calc(100vh - var(--nav-height));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Collapsed modifiers change column sizing */
+.app-shell--left-collapsed .app-shell__sidebar {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}
+.app-shell--left-collapsed .app-shell__sidebar > * {
+  opacity: 0;
+  pointer-events: none;
+}
+.app-shell--right-collapsed .app-shell__sources {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}
+.app-shell--right-collapsed .app-shell__sources > * {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Add transitions for smooth collapse/expand */
+.app-shell__sidebar,
+.app-shell__sources {
+  transition: width 260ms cubic-bezier(.2,.9,.2,1), padding 200ms ease, border 200ms ease;
+}
+
+.app-shell__sidebar > *,
+.app-shell__sources > * {
+  transition: opacity 180ms ease;
+  opacity: 1;
 }
 
 /* Panels */
@@ -14,34 +98,36 @@
 .app-shell__main,
 .app-shell__sources {
   background-color: var(--bg-panel);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
   box-shadow: var(--shadow-soft);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Sidebar */
 
 .app-shell__sidebar {
-  background: linear-gradient(
+  background:
+    linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.7),
-      rgba(245, 239, 226, 0.95)
+      rgba(255, 255, 255, 0.9),
+      rgba(245, 237, 222, 0.98)
     ),
     var(--bg-sidebar);
-  border-color: #c6bca8;
+  border-color: #cbbfa9;
 }
 
 .app-shell__sidebar header {
   padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .app-shell__sidebar main {
   padding: var(--spacing-md) var(--spacing-lg);
-  overflow-y: auto;
+  overflow: auto;
 }
 
 /* Main chat area */
@@ -56,31 +142,71 @@
   height: 100%;
 }
 
+.app-shell__main {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .chat-view__messages {
   flex: 1;
   padding: var(--spacing-lg);
-  overflow-y: auto;
+  overflow: auto;
 }
 
 .chat-view__input {
   padding: var(--spacing-md) var(--spacing-lg);
-  border-top: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.92);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 /* Sources panel */
 
 .app-shell__sources header {
   padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .app-shell__sources main {
   padding: var(--spacing-md) var(--spacing-lg);
-  overflow-y: auto;
+  overflow: auto;
 }
 
-/* Message bubbles */
+/* Session header in main column */
+
+.session-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), transparent);
+}
+
+.session-header__title {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #4a3524;
+}
+
+.session-header__meta {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Snippets list */
+
+.snippets-list > div {
+  margin-bottom: 12px;
+}
+
+.snippets-list .snippet {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #faf6f0;
+}
+
+/* Message blocks (less “bubble”, more modern cards) */
 
 .message-list {
   display: flex;
@@ -89,30 +215,31 @@
 }
 
 .message {
-  max-width: 92%;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background-color: #ffffff;
+  width: 100%;
+  padding: var(--spacing-sm) 0; /* vertical spacing only; content spans full width */
+  background: transparent;
   font-size: 0.95rem;
-  line-height: 1.5;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
 }
 
-.message--user {
-  align-self: flex-end;
-  background: #f5efe1;
-  border-color: #ccb99a;
+.message__body {
+  padding: 8px 12px;
 }
 
-.message--assistant {
-  align-self: flex-start;
-  background: #ffffff;
+.message--user .message__body {
+  border-left: 4px solid var(--accent-focus);
+}
+
+.message--assistant .message__body {
+  border-left: 4px solid var(--accent);
 }
 
 .message__role {
   font-family: var(--font-serif);
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-soft);
   margin-bottom: var(--spacing-xs);
@@ -129,7 +256,7 @@
   flex: 1;
   resize: none;
   padding: var(--spacing-md);
-  border-radius: var(--radius-md);
+  border-radius: 14px;
   border: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
   font-size: 0.95rem;
@@ -141,29 +268,61 @@
 .chat-input__textarea:focus {
   outline: 1px solid var(--accent-focus);
   border-color: var(--accent-focus);
-  box-shadow: 0 0 0 1px rgba(214, 178, 106, 0.25);
+  box-shadow: 0 0 0 1px rgba(214, 178, 106, 0.26);
 }
 
-/* Buttons */
+/* Buttons: modern pill design */
 
 .btn {
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  background: linear-gradient(to bottom, #fefbf4, #f0e3cc);
-  color: var(--text-main);
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: linear-gradient(180deg, #f8f3ec 0%, #eee0cf 100%);
+  color: #5b4632;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   cursor: pointer;
   font-family: var(--font-sans);
+  box-shadow: 0 1px 1px rgba(15, 8, 3, 0.05);
+  transition:
+    background 120ms ease-out,
+    box-shadow 120ms ease-out,
+    transform 80ms ease-out,
+    border-color 120ms ease-out;
 }
 
 .btn:hover:not(:disabled) {
-  background: linear-gradient(to bottom, #fff9ec, #e7d6b8);
+  background: linear-gradient(180deg, #fdf8f2 0%, #f1e1cf 100%);
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 10px rgba(15, 8, 3, 0.12);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 4px rgba(15, 8, 3, 0.18);
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: default;
+  box-shadow: none;
+}
+
+/* Stronger primary button (Send, Open PDF, etc.) */
+
+.btn--primary {
+  background: linear-gradient(135deg, #d7b48a 0%, #c38f5a 100%);
+  color: #fffaf3;
+  border-color: rgba(118, 76, 26, 0.45);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dfbd95 0%, #c89461 100%);
 }
 
 /* Sources strip */
@@ -178,7 +337,7 @@
   border-radius: 999px;
   border: 1px solid var(--accent-soft);
   background: #f6f7fb;
-  padding: 2px 10px;
+  padding: 3px 10px;
   font-size: 0.8rem;
   color: var(--text-accent);
 }
@@ -188,7 +347,7 @@
 .error-banner {
   padding: 6px 10px;
   margin-bottom: var(--spacing-sm);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   border: 1px solid #c77a7a;
   background: #fceeee;
   color: #6e2727;
@@ -206,7 +365,7 @@
   background: #fdf9f2;
 }
 
-/* Responsive fallback */
+/* Responsive */
 
 @media (max-width: 1100px) {
   .app-shell {
@@ -237,6 +396,7 @@
   .app-shell {
     display: flex;
     flex-direction: column;
+    padding: var(--spacing-lg);
   }
 
   .app-shell__sidebar,

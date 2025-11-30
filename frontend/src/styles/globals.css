@@ -16,30 +16,32 @@ body,
 
 body {
   font-family: var(--font-sans);
-  background: radial-gradient(circle at top left, #fdfbf6, var(--bg-body));
+  background:
+    radial-gradient(circle at top left, #fdfbf6, var(--bg-body));
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
 }
 
+/* keep the paper texture but make it slightly softer */
 body::before {
-  /* subtle vertical stripes, early-Internet paper */
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.45),
-    rgba(255, 255, 255, 0.45)
-  ),
+  background-image:
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.55),
+      rgba(255, 255, 255, 0.55)
+    ),
     linear-gradient(
       to right,
-      rgba(255, 255, 255, 0.6) 0,
-      rgba(255, 255, 255, 0.6) 1px,
+      rgba(255, 255, 255, 0.7) 0,
+      rgba(255, 255, 255, 0.7) 1px,
       transparent 1px,
-      transparent 4px
+      transparent 5px
     );
-  background-size: 100% 100%, 5px 100%;
+  background-size: 100% 100%, 6px 100%;
   mix-blend-mode: multiply;
   z-index: -1;
 }
@@ -77,8 +79,8 @@ pre {
 
 .app-heading {
   font-family: var(--font-serif);
-  font-size: 1.2rem;
-  letter-spacing: 0.06em;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-soft);
 }
@@ -86,4 +88,80 @@ pre {
 .muted {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+/* Animations */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Message styling */
+
+.message {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  margin-bottom: 8px;
+}
+
+.message--user {
+  background: rgba(230, 196, 139, 0.08);
+}
+
+.message--assistant {
+  background: var(--bg-panel);
+  border-left: 3px solid var(--accent);
+}
+
+.message__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-soft);
+  border: 1px solid var(--border-subtle);
+}
+
+.message__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.message__role {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.message__body {
+  line-height: 1.6;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.citation-ref {
+  color: var(--accent);
+  font-weight: 600;
+  margin: 0 2px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.citation-ref:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
 }

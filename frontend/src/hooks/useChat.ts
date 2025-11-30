@@ -9,8 +9,11 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<ChatResponse | null>(null);
 
-  async function sendMessage(content: string) {
-    if (!content.trim() || loading) return;
+  async function sendMessage(content: string): Promise<
+    | { userMessage: ChatMessage; assistantMessage: ChatMessage; response: ChatResponse }
+    | null
+  > {
+    if (!content.trim() || loading) return null;
     setError(null);
 
     const userMessage: ChatMessage = {
@@ -31,8 +34,10 @@ export function useChat() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
       setLastResponse(res);
+      return { userMessage, assistantMessage, response: res };
     } catch (e: any) {
       setError(e.message ?? "Failed to get answer");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -44,5 +49,11 @@ export function useChat() {
     if (thread.lastResponse) setLastResponse(thread.lastResponse);
   }
 
-  return { messages, loading, error, lastResponse, sendMessage, loadThread };
+  function clearMessages() {
+    setMessages([]);
+    setLastResponse(null);
+    setError(null);
+  }
+
+  return { messages, loading, error, lastResponse, sendMessage, loadThread, clearMessages };
 }

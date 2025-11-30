@@ -1,6 +1,7 @@
 export interface Citation {
   id: string;
   title: string;
+  authors?: string;
   year?: number;
   pdf_path?: string;
 }

@@ -9,8 +9,18 @@ from backend.zotero_dbase import ZoteroLibrary
 from fastapi.middleware.cors import CORSMiddleware
 from backend.interface import ZoteroChatbot
 from backend.embed_utils import get_embedding
+import os
+import json
+from pathlib import Path
 
-app = FastAPI() 
+app = FastAPI()
+
+# Settings file path
+SETTINGS_DIR = Path.home() / ".zotero-llm"
+SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+
+# Ensure settings directory exists
+SETTINGS_DIR.mkdir(parents=True, exist_ok=True) 
 
 # CORS setup: matches your frontend HTML server (e.g., http://localhost:8080)
 app.add_middleware(
@@ -156,6 +166,144 @@ def index_status():
         status = "indexing" if getattr(chatbot, "is_indexing", False) else "idle"
         progress = getattr(chatbot, "index_progress", None) or {}
         return {"status": status, "progress": progress}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/open_pdf")
+def open_pdf(payload: dict = Body(...)):
+    """Open a PDF file with the system's default viewer.
+    Expects JSON body: {"pdf_path": "/path/to/file.pdf"}
+    """
+    import subprocess
+    import platform
+    import os
+    
+    try:
+        pdf_path = payload.get("pdf_path")
+        if not pdf_path:
+            return {"error": "Missing 'pdf_path' in request body"}
+        
+        if not os.path.exists(pdf_path):
+            return {"error": f"PDF file not found: {pdf_path}"}
+        
+        # Open the file with the system's default application
+        system = platform.system()
+        if system == "Darwin":  # macOS
+            subprocess.run(["open", pdf_path], check=True)
+        elif system == "Windows":
+            os.startfile(pdf_path)
+        elif system == "Linux":
+            subprocess.run(["xdg-open", pdf_path], check=True)
+        else:
+            return {"error": f"Unsupported operating system: {system}"}
+        
+        return {"success": True, "message": f"Opened {pdf_path}"}
+    except subprocess.CalledProcessError as e:
+        return {"error": f"Failed to open PDF: {str(e)}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/ollama_status")
+def ollama_status():
+    """Check if Ollama is running and responsive."""
+    import requests
+    try:
+        resp = requests.get("http://localhost:11434/api/tags", timeout=2)
+        if resp.status_code == 200:
+            data = resp.json()
+            models = data.get("models", [])
+            return {
+                "status": "running",
+                "models": [m.get("name") for m in models] if models else []
+            }
+        else:
+            return {"status": "error", "message": "Ollama responded with error"}
+    except requests.exceptions.ConnectionError:
+        return {"status": "offline", "message": "Cannot connect to Ollama"}
+    except requests.exceptions.Timeout:
+        return {"status": "timeout", "message": "Ollama request timed out"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+def load_settings():
+    """Load settings from JSON file."""
+    default_settings = {
+        "openaiApiKey": "",
+        "anthropicApiKey": "",
+        "defaultModel": "ollama",
+        "zoteroPath": DB_PATH,
+        "chromaPath": CHROMA_PATH,
+    }
+    
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                saved_settings = json.load(f)
+                # Merge with defaults to ensure all keys exist
+                return {**default_settings, **saved_settings}
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+            return default_settings
+    return default_settings
+
+
+def save_settings(settings: dict):
+    """Save settings to JSON file."""
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+        return False
+
+
+@app.get("/settings")
+def get_settings():
+    """Get current application settings."""
+    try:
+        settings = load_settings()
+        # Don't send full API keys to frontend for security
+        # Just indicate if they're set
+        return {
+            **settings,
+            "openaiApiKey": "***" if settings.get("openaiApiKey") else "",
+            "anthropicApiKey": "***" if settings.get("anthropicApiKey") else "",
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/settings")
+def update_settings(settings: dict = Body(...)):
+    """Update application settings."""
+    try:
+        current_settings = load_settings()
+        
+        # Handle API keys specially - only update if not masked
+        for key in ["openaiApiKey", "anthropicApiKey"]:
+            if key in settings:
+                # If frontend sends "***", keep the existing key
+                if settings[key] == "***":
+                    settings[key] = current_settings.get(key, "")
+        
+        # Update settings
+        updated_settings = {**current_settings, **settings}
+        
+        if save_settings(updated_settings):
+            # Update global paths if they changed
+            global DB_PATH, CHROMA_PATH
+            if "zoteroPath" in settings:
+                DB_PATH = settings["zoteroPath"]
+            if "chromaPath" in settings:
+                CHROMA_PATH = settings["chromaPath"]
+            
+            return {"success": True, "message": "Settings saved successfully"}
+        else:
+            return {"error": "Failed to save settings"}
     except Exception as e:
         return {"error": str(e)}
 

@@ -9,11 +9,7 @@ const ChatView: React.FC = () => {
 
   return (
     <div className="chat-view">
-      <div style={{ padding: "12px 16px" }}>
-        <div className="app-heading">Zotero LLM Assistant</div>
-        <div className="muted">
-          Ask questions over your local library. All processing stays on your machine.
-        </div>
+      <div style={{ padding: "6px 16px" }}>
         {error && <ErrorBanner message={error} />}
       </div>
       <ChatMessages messages={messages} loading={loading} />
