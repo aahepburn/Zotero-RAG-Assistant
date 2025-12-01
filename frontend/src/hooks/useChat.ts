@@ -9,7 +9,7 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<ChatResponse | null>(null);
 
-  async function sendMessage(content: string): Promise<
+  async function sendMessage(content: string, sessionId?: string): Promise<
     | { userMessage: ChatMessage; assistantMessage: ChatMessage; response: ChatResponse }
     | null
   > {
@@ -25,7 +25,10 @@ export function useChat() {
     setLoading(true);
 
     try {
-      const res = await chatApi({ query: content.trim() });
+      const res = await chatApi({ 
+        query: content.trim(),
+        session_id: sessionId
+      });
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",

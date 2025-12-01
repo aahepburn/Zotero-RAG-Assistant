@@ -11,6 +11,7 @@ type SessionsShape = {
     initialAnswer?: string,
     initialSources?: SourceRef[],
     initialSnippets?: Snippet[],
+    customTitle?: string,
   ) => string;
   appendMessage: (sessionId: string, message: Message) => void;
   updateSessionTitle: (sessionId: string, newTitle: string) => void;
@@ -69,12 +70,12 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
     }
   }, [sessions, currentSessionId, leftCollapsed, rightCollapsed]);
 
-  function createSession(initialUserQuestion: string, initialAnswer = "", initialSources: SourceRef[] = [], initialSnippets: Snippet[] = []) {
+  function createSession(initialUserQuestion: string, initialAnswer = "", initialSources: SourceRef[] = [], initialSnippets: Snippet[] = [], customTitle?: string) {
     const id = crypto.randomUUID();
     const createdAt = nowISO();
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: initialUserQuestion, createdAt };
     const assistantMsg: Message = { id: crypto.randomUUID(), role: "assistant", content: initialAnswer, createdAt };
-    const title = (initialUserQuestion || "New session").slice(0, 80);
+    const title = customTitle || (initialUserQuestion || "New session").slice(0, 80);
     const s: Session = {
       id,
       title,

@@ -51,7 +51,7 @@ const SourcesPanel: React.FC = () => {
     return (
       <>
         <header>
-          <div className="app-heading">Sources</div>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Sources</div>
           <div className="muted">Cited items and snippets.</div>
         </header>
         <main>
@@ -72,7 +72,7 @@ const SourcesPanel: React.FC = () => {
     <>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div className="app-heading">Sources</div>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Sources</div>
           <div className="muted">Cited items and snippets for this session</div>
         </div>
         <div>

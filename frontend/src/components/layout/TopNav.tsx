@@ -28,20 +28,21 @@ const OllamaStatus: React.FC = () => {
   const [status, setStatus] = useState<"checking" | "running" | "offline" | "error">("checking");
   const [models, setModels] = useState<string[]>([]);
 
+  const check = async () => {
+    try {
+      const resp = await fetch("/ollama_status");
+      const data = await resp.json();
+      setStatus(data.status);
+      setModels(data.models || []);
+      return data.status;
+    } catch (e) {
+      setStatus("error");
+      return "error";
+    }
+  };
+
   useEffect(() => {
-    const check = async () => {
-      try {
-        const resp = await fetch("/ollama_status");
-        const data = await resp.json();
-        setStatus(data.status);
-        setModels(data.models || []);
-      } catch (e) {
-        setStatus("error");
-      }
-    };
     check();
-    const interval = setInterval(check, 30000); // Check every 30 seconds
-    return () => clearInterval(interval);
   }, []);
 
   const statusColors = {
@@ -67,7 +68,6 @@ const OllamaStatus: React.FC = () => {
         fontSize: "12px",
         color: "var(--text-muted)",
       }}
-      title={status === "running" && models.length > 0 ? `Models: ${models.join(", ")}` : statusLabels[status]}
     >
       <div
         style={{
@@ -79,6 +79,17 @@ const OllamaStatus: React.FC = () => {
         }}
       />
       <span>{statusLabels[status]}</span>
+      <button
+        className="btn"
+        onClick={check}
+        disabled={status === "checking"}
+        style={{ padding: "2px 6px", fontSize: "11px", marginLeft: "2px" }}
+        title={status === "running" && models.length > 0 ? `Models: ${models.join(", ")}\n\nClick to refresh` : "Refresh Ollama status"}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
     </div>
   );
 };

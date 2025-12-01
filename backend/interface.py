@@ -5,16 +5,38 @@ from backend.zoteroitem import ZoteroItem
 from backend.pdf import PDF
 from backend.vector_db import ChromaClient
 from backend.embed_utils import get_embedding, rerank_passages
-from backend.local_llm import generate_answer
+from backend.model_providers import ProviderManager, Message
+from backend.conversation_store import ConversationStore
 import os
 from collections import OrderedDict
 import threading
 import time
 
 class ZoteroChatbot:
-    def __init__(self, db_path, chroma_path):
+    def __init__(
+        self, 
+        db_path, 
+        chroma_path,
+        active_provider_id="ollama",
+        active_model=None,
+        credentials=None,
+        embedding_model_id="bge-base"
+    ):
         self.zlib = ZoteroLibrary(db_path)
-        self.chroma = ChromaClient(chroma_path)
+        self.embedding_model_id = embedding_model_id
+        # Pass embedding model ID to ChromaClient so it creates model-specific collections
+        self.chroma = ChromaClient(chroma_path, embedding_model_id=embedding_model_id)
+        
+        # Initialize provider manager for LLM interactions
+        self.provider_manager = ProviderManager(
+            active_provider_id=active_provider_id,
+            active_model=active_model,
+            credentials=credentials or {}
+        )
+        
+        # Initialize conversation store for stateful chat
+        self.conversation_store = ConversationStore()
+        
         # Indexing state for reporting progress via /index_status
         self.is_indexing = False
         # Cancellation flag for background indexing
@@ -28,6 +50,22 @@ class ZoteroChatbot:
             "eta_seconds": None,
         }
         self._index_thread = None
+    
+    def update_provider_settings(
+        self,
+        active_provider_id=None,
+        active_model=None,
+        credentials=None
+    ):
+        """Update the provider settings for this chatbot instance."""
+        if active_provider_id:
+            self.provider_manager.set_active_provider(active_provider_id, active_model)
+        elif active_model:
+            self.provider_manager.active_model = active_model
+        
+        if credentials:
+            for provider_id, creds in credentials.items():
+                self.provider_manager.set_credentials(provider_id, creds)
     
     def _index_library_worker(self):
         try:
@@ -71,11 +109,13 @@ class ZoteroChatbot:
                     continue
                 
                 chunks = [c['text'] for c in chunks_with_pages]
-                vectors = [get_embedding(chunk) for chunk in chunks]
+                vectors = [get_embedding(chunk, self.embedding_model_id) for chunk in chunks]
                 
                 # Validate embedding dimensions
-                if vectors and len(vectors[0]) != 768:
-                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}")
+                from backend.embed_utils import get_embedding_dimension
+                expected_dim = get_embedding_dimension(self.embedding_model_id)
+                if vectors and len(vectors[0]) != expected_dim:
+                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}, expected {expected_dim}")
 
                 # Generate unique chunk IDs
                 item_id = str(item.metadata.get('item_id'))
@@ -193,10 +233,12 @@ class ZoteroChatbot:
                     continue
                 
                 chunks = [c['text'] for c in chunks_with_pages]
-                vectors = [get_embedding(chunk) for chunk in chunks]
+                vectors = [get_embedding(chunk, self.embedding_model_id) for chunk in chunks]
                 
-                if vectors and len(vectors[0]) != 768:
-                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}")
+                from backend.embed_utils import get_embedding_dimension
+                expected_dim = get_embedding_dimension(self.embedding_model_id)
+                if vectors and len(vectors[0]) != expected_dim:
+                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}, expected {expected_dim}")
 
                 item_id = str(item.metadata.get('item_id'))
                 chunk_ids = [f"{item_id}:{i}" for i in range(len(chunks))]
@@ -460,7 +502,18 @@ class ZoteroChatbot:
 
 
 
-    def chat(self, query, filter_item_ids=None):
+    def chat(self, query, filter_item_ids=None, session_id=None):
+        """
+        Process a chat query with stateful conversation history.
+        
+        Args:
+            query: User's question
+            filter_item_ids: Optional list of Zotero item IDs to filter search
+            session_id: Optional session ID for conversation continuity
+            
+        Returns:
+            Dictionary with summary, citations, and snippets
+        """
         # 1) Retrieve relevant chunks using HYBRID search (dense + sparse)
         # Best practice from Reddit: Combine semantic and keyword matching
         # Retrieve more candidates (k=15-20), then re-rank and use top 6-8
@@ -468,7 +521,7 @@ class ZoteroChatbot:
         search_prompt = self.build_search_prompt(query)
         
         # Use hybrid search combining dense embeddings + BM25
-        results = self.chroma.query_hybrid(query=search_prompt, k=15, where=db_filter) or {}
+        results = self.chroma.query_hybrid(query=search_prompt, k=15, where=db_filter, embedding_model_id=self.embedding_model_id) or {}
 
         docs_outer = results.get("documents", [[]])
         metas_outer = results.get("metadatas", [[]])
@@ -546,21 +599,155 @@ class ZoteroChatbot:
             for (title, year, pdf_path), cid in citation_map.items()
         ]
 
-        # 4) Call Ollama to synthesize a nice answer
-        prompt = self.build_answer_prompt(query, snippets)
+        # 4) Build conversation with RAG context using stateful history
+        is_new_session = False
+        if session_id:
+            # Load conversation history for this session
+            conversation_history = self.conversation_store.get_messages(session_id)
+            
+            # Check if this is the first user message (only system message exists)
+            # Must check BEFORE appending the new message
+            is_new_session = len([m for m in conversation_history if m.role == "user"]) == 0
+            print(f"Session {session_id}: is_new_session={is_new_session}, user_messages={len([m for m in conversation_history if m.role == 'user'])}")
+            
+            # Build user message with RAG context embedded
+            user_message_with_context = self.build_contextual_user_message(query, snippets)
+            
+            # Append new user message to history
+            self.conversation_store.append_message(session_id, "user", user_message_with_context)
+            
+            # Get updated history and trim for context window
+            full_history = self.conversation_store.get_messages(session_id)
+            messages = self.conversation_store.trim_messages_for_context(
+                full_history, 
+                max_messages=20,  # Keep last 10 turns (20 messages)
+                max_chars=8000    # Approximate token limit
+            )
+        else:
+            # Fallback: single-turn conversation (backward compatibility)
+            prompt = self.build_answer_prompt(query, snippets)
+            messages = [Message(role="user", content=prompt)]
+        
+        # 5) Call the active LLM provider with full conversation history
         try:
-            summary = generate_answer(prompt)
-        except Exception:
+            response = self.provider_manager.chat(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=600  # Increased for academic answers
+            )
+            summary = response.content
+            
+            # Save assistant response to conversation history
+            if session_id:
+                self.conversation_store.append_message(session_id, "assistant", summary)
+        except Exception as e:
+            print(f"LLM generation error: {e}")
             if snippets:
                 summary = snippets[0]["snippet"]
             else:
                 summary = "No relevant passages found in your Zotero library."
 
+        # 6) Generate session title for new sessions
+        generated_title = None
+        if session_id and is_new_session:
+            print(f"Calling generate_session_title with query='{query[:100]}' and summary='{summary[:100]}'")
+            generated_title = self.generate_session_title(query, summary)
+            print(f"Generated session title: {generated_title}")
+        else:
+            print(f"Not generating title - session_id={session_id}, is_new_session={is_new_session}")
+
+        print(f"Returning from chat() - generated_title={generated_title}")
         return {
             "summary": summary,
             "citations": citations,
             "snippets": snippets,
+            "generated_title": generated_title,  # Include in response for frontend
         }
-
+    
+    def build_contextual_user_message(self, question: str, snippets: list[dict]) -> str:
+        """
+        Build a user message that combines the question with RAG context.
+        
+        This allows the conversation history to maintain full context while
+        injecting fresh evidence from the library for each turn.
+        
+        Args:
+            question: The user's raw question
+            snippets: Retrieved snippets from the library
+            
+        Returns:
+            Formatted message with question and context
+        """
+        if not snippets:
+            return question
+        
+        # Build rich context with metadata
+        context_blocks = []
+        for s in snippets:
+            cid = s["citation_id"]
+            title = s.get("title", "Untitled")
+            year = s.get("year", "")
+            authors = s.get("authors", "Unknown")
+            txt = s.get("snippet", "")
+            page = s.get("page")
+            
+            # Include bibliographic context
+            bib = f"{authors} ({year})" if year else authors
+            page_info = f", p. {page}" if page else ""
+            context_blocks.append(f"[{cid}] {title}{page_info}\n{bib}\n{txt}")
+        
+        context = "\n\n".join(context_blocks)
+        
+        return (
+            f"{question}\n\n"
+            f"RELEVANT CONTEXT FROM LIBRARY:\n\n{context}\n\n"
+            "Please answer using ONLY the provided context. Cite sources using [1], [2], etc."
+        )
+    
+    def generate_session_title(self, user_question: str, assistant_response: str) -> str:
+        """
+        Generate a concise title for a chat session based on the first interaction.
+        
+        Args:
+            user_question: The user's first question
+            assistant_response: The assistant's first response
+            
+        Returns:
+            A concise title (3-8 words) summarizing the session topic
+        """
+        try:
+            print(f"Generating title for question: {user_question[:100]}")
+            prompt = (
+                "Generate a concise, descriptive title (3-8 words) for this research conversation. "
+                "Focus on the main topic or research question.\n\n"
+                f"User asked: {user_question[:300]}\n\n"
+                f"Assistant responded: {assistant_response[:300]}\n\n"
+                "Title (3-8 words, no quotes):"
+            )
+            
+            messages = [Message(role="user", content=prompt)]
+            response = self.provider_manager.chat(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=30
+            )
+            
+            # Clean up the generated title
+            title = response.content.strip()
+            print(f"Raw title from LLM: '{title}'")
+            # Remove quotes if present
+            title = title.strip('"').strip("'")
+            # Limit length
+            if len(title) > 80:
+                title = title[:77] + "..."
+            
+            print(f"Cleaned title: '{title}'")
+            return title if title else user_question[:50]
+        except Exception as e:
+            print(f"Title generation error: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to first few words of question
+            return user_question[:50]
 
 

@@ -44,19 +44,13 @@ nest-asyncio==1.6.0
 networkx==3.5
 numpy==2.3.5
 oauthlib==3.3.1
-onnxruntime==1.23.2
-opentelemetry-api==1.38.0
-opentelemetry-exporter-otlp-proto-common==1.38.0
-opentelemetry-exporter-otlp-proto-grpc==1.38.0
-opentelemetry-proto==1.38.0
-opentelemetry-sdk==1.38.0
-opentelemetry-semantic-conventions==0.59b0
+onnxruntime>=1.16.0
 orjson==3.11.4
 overrides==7.7.0
 packaging==25.0
 pillow==12.0.0
 posthog==5.4.0
-protobuf==6.33.1
+protobuf>=3.20.2,<5.0.0
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pybase64==1.4.2
@@ -106,3 +100,8 @@ watchfiles==1.1.1
 websocket-client==1.9.0
 websockets==15.0.1
 zipp==3.23.0
+
+# LLM Provider SDKs
+openai>=1.0.0
+anthropic>=0.18.0
+google-generativeai>=0.3.0

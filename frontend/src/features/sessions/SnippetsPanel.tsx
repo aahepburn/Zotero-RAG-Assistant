@@ -29,7 +29,7 @@ const SnippetsPanel: React.FC = () => {
     <>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div className="app-heading">Evidence</div>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Evidence</div>
           <div className="muted">Source snippets for the latest answer</div>
         </div>
         <div>

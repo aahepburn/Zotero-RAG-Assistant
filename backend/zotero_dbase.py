@@ -1,14 +1,39 @@
 #zotero_dbase.py
 import sqlite3
 import os
+import threading
+from contextlib import contextmanager
 from backend.zoteroitem import ZoteroItem
 
 username = 'aahepburn'
 
 class ZoteroLibrary:
     def __init__(self, db_path):
-        self.conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True, check_same_thread=False)
-        self.cur = self.conn.cursor()
+        self.db_path = db_path
+        self._local = threading.local()
+        self._lock = threading.Lock()
+    
+    def _get_connection(self):
+        """Get or create thread-local database connection."""
+        if not hasattr(self._local, 'conn') or self._local.conn is None:
+            self._local.conn = sqlite3.connect(
+                f'file:{self.db_path}?mode=ro', 
+                uri=True, 
+                check_same_thread=True  # Changed to True for safety
+            )
+            # Enable shared cache for read-only connections
+            self._local.conn.isolation_level = None
+        return self._local.conn
+    
+    @contextmanager
+    def _cursor(self):
+        """Context manager for thread-safe cursor access."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            yield cursor
+        finally:
+            cursor.close()
 
     def search_parent_items(self, 
                             authors=None, 
@@ -60,8 +85,9 @@ class ZoteroLibrary:
         LEFT JOIN collections c ON ci.collectionID = c.collectionID
         WHERE {where_clause}
         """
-        self.cur.execute(query, tuple(params))
-        return self.cur.fetchall()
+        with self._cursor() as cur:
+            cur.execute(query, tuple(params))
+            return cur.fetchall()
     
 
     def search_parent_items_with_pdfs(self, 
@@ -111,8 +137,9 @@ class ZoteroLibrary:
         GROUP BY i.itemID
         """
 
-        self.cur.execute(query, tuple(params))
-        results = self.cur.fetchall()
+        with self._cursor() as cur:
+            cur.execute(query, tuple(params))
+            results = cur.fetchall()
         storage_dir = f'/Users/{username}/Zotero/storage/'
         zotero_items = []
 
@@ -143,4 +170,10 @@ class ZoteroLibrary:
             }
             zotero_items.append(ZoteroItem(filepath=pdf_full_path, metadata=metadata))
         return zotero_items
+    
+    def close(self):
+        """Close thread-local connections. Call this on shutdown."""
+        if hasattr(self._local, 'conn') and self._local.conn is not None:
+            self._local.conn.close()
+            self._local.conn = None
 

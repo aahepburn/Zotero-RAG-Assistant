@@ -8,19 +8,22 @@ import "./styles/theme.css";
 import { ChatProvider } from "./contexts/ChatContext";
 import { SessionsProvider } from "./contexts/SessionsContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import { ProfileProvider } from "./contexts/ProfileContext";
 
 const App: React.FC = () => (
 	<Router>
-		<SettingsProvider>
-			<SessionsProvider>
-				<ChatProvider>
-					<Routes>
-						<Route path="/" element={<AppShell />} />
-						<Route path="/settings" element={<Settings />} />
-					</Routes>
-				</ChatProvider>
-			</SessionsProvider>
-		</SettingsProvider>
+		<ProfileProvider>
+			<SettingsProvider>
+				<SessionsProvider>
+					<ChatProvider>
+						<Routes>
+							<Route path="/" element={<AppShell />} />
+							<Route path="/settings" element={<Settings />} />
+						</Routes>
+					</ChatProvider>
+				</SessionsProvider>
+			</SettingsProvider>
+		</ProfileProvider>
 	</Router>
 );
 

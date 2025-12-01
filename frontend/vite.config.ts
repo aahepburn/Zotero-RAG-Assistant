@@ -18,6 +18,14 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true
       },
+      "/index_stats": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/index_cancel": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
       "/open_pdf": {
         target: "http://localhost:8000",
         changeOrigin: true
@@ -27,6 +35,26 @@ export default defineConfig({
         changeOrigin: true
       },
       "/ollama_status": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/providers": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/settings": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/db_health": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/embedding_models": {
+        target: "http://localhost:8000",
+        changeOrigin: true
+      },
+      "/profiles": {
         target: "http://localhost:8000",
         changeOrigin: true
       }

@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings, ModelInfo, ProviderInfo } from '../contexts/SettingsContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import ProfileSelector from '../components/profile/ProfileSelector';
 import '../styles/settings.css';
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
-  const { settings, updateSettings, loading } = useSettings();
+  const { settings, updateSettings, loading, availableProviders } = useSettings();
   const [formData, setFormData] = useState(settings);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [apiKeyModified, setApiKeyModified] = useState({
-    openai: false,
-    anthropic: false,
-  });
+  const [availableModels, setAvailableModels] = useState<Record<string, ModelInfo[]>>({});
+  const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
+  const [validatingProvider, setValidatingProvider] = useState<string | null>(null);
+  const [providerValidation, setProviderValidation] = useState<Record<string, { valid: boolean; message?: string }>>({});
 
   useEffect(() => {
     setFormData(settings);
@@ -25,14 +26,100 @@ const Settings: React.FC = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setSaveSuccess(false);
     setSaveError(null);
-    
-    // Track if API keys are being modified
-    if (field === 'openaiApiKey') {
-      setApiKeyModified(prev => ({ ...prev, openai: true }));
-    } else if (field === 'anthropicApiKey') {
-      setApiKeyModified(prev => ({ ...prev, anthropic: true }));
+  };
+
+  const handleProviderEnabledChange = (providerId: string, enabled: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      providers: {
+        ...prev.providers,
+        [providerId]: {
+          ...prev.providers[providerId],
+          enabled
+        }
+      }
+    }));
+    setSaveSuccess(false);
+    setSaveError(null);
+  };
+
+  const handleProviderCredentialChange = (providerId: string, key: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      providers: {
+        ...prev.providers,
+        [providerId]: {
+          ...prev.providers[providerId],
+          credentials: {
+            ...prev.providers[providerId].credentials,
+            [key]: value
+          }
+        }
+      }
+    }));
+    setSaveSuccess(false);
+    setSaveError(null);
+  };
+
+  const loadModelsForProvider = async (providerId: string) => {
+    setLoadingModels(prev => ({ ...prev, [providerId]: true }));
+    try {
+      const response = await fetch(`/providers/${providerId}/models`);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableModels(prev => ({ ...prev, [providerId]: data.models || [] }));
+      }
+    } catch (err) {
+      console.error(`Failed to load models for ${providerId}:`, err);
+    } finally {
+      setLoadingModels(prev => ({ ...prev, [providerId]: false }));
     }
   };
+
+  const validateProvider = async (providerId: string) => {
+    setValidatingProvider(providerId);
+    try {
+      const response = await fetch(`/providers/${providerId}/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credentials: formData.providers[providerId].credentials
+        })
+      });
+      const data = await response.json();
+      setProviderValidation(prev => ({
+        ...prev,
+        [providerId]: {
+          valid: data.valid,
+          message: data.error || data.details || (data.valid ? 'Connection successful' : 'Validation failed')
+        }
+      }));
+      
+      // If valid, load models
+      if (data.valid) {
+        await loadModelsForProvider(providerId);
+      }
+    } catch (err) {
+      setProviderValidation(prev => ({
+        ...prev,
+        [providerId]: {
+          valid: false,
+          message: 'Connection failed'
+        }
+      }));
+    } finally {
+      setValidatingProvider(null);
+    }
+  };
+
+  useEffect(() => {
+    // Load models for enabled providers on mount
+    Object.entries(formData.providers).forEach(([providerId, config]) => {
+      if (config.enabled && !loadingModels[providerId] && !availableModels[providerId]) {
+        loadModelsForProvider(providerId);
+      }
+    });
+  }, [formData.providers]);
 
   const handleSave = async () => {
     try {
@@ -48,10 +135,8 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleBrowseZotero = async () => {
-    // In a real implementation, this would use a file picker dialog
-    // For now, we'll just show a message
-    alert('File picker would open here. For now, please enter the path manually.');
+  const getProviderInfo = (providerId: string): ProviderInfo | undefined => {
+    return availableProviders.find(p => p.id === providerId);
   };
 
   if (loading) {
@@ -76,81 +161,175 @@ const Settings: React.FC = () => {
 
       <div className="settings-container">
         <section className="settings-section">
-          <h2 className="settings-section-title">API Configuration</h2>
+          <h2 className="settings-section-title">Profile</h2>
           <p className="settings-section-description">
-            Configure your API keys for external language model providers. Leave blank to use local Ollama models only.
+            Manage your user profiles. Each profile has its own settings, chat history, and vector database.
+          </p>
+          <ProfileSelector />
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Active Model</h2>
+          <p className="settings-section-description">
+            Select your default LLM provider and model for chat interactions.
           </p>
 
           <div className="settings-field">
-            <label className="settings-label" htmlFor="openai-key">
-              OpenAI API Key
-              <span className="settings-optional">Optional</span>
+            <label className="settings-label" htmlFor="active-provider">
+              Provider
             </label>
-            <Input
-              id="openai-key"
-              type={formData.openaiApiKey === '***' && !apiKeyModified.openai ? 'text' : 'password'}
-              value={formData.openaiApiKey}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('openaiApiKey', e.target.value)}
-              placeholder={formData.openaiApiKey === '***' ? 'API key is set (edit to change)' : 'sk-...'}
-              className="settings-input"
-            />
-            <p className="settings-hint">
-              Used for GPT-4, GPT-3.5, and other OpenAI models.{' '}
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
-                Get your API key
-              </a>
-            </p>
+            <select
+              id="active-provider"
+              value={formData.activeProviderId}
+              onChange={(e) => handleInputChange('activeProviderId', e.target.value)}
+              className="settings-select"
+            >
+              {availableProviders.map(provider => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="settings-field">
-            <label className="settings-label" htmlFor="anthropic-key">
-              Anthropic API Key
-              <span className="settings-optional">Optional</span>
+            <label className="settings-label" htmlFor="active-model">
+              Model
+              {loadingModels[formData.activeProviderId] && <span className="settings-loading-inline"> (loading...)</span>}
             </label>
-            <Input
-              id="anthropic-key"
-              type={formData.anthropicApiKey === '***' && !apiKeyModified.anthropic ? 'text' : 'password'}
-              value={formData.anthropicApiKey}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('anthropicApiKey', e.target.value)}
-              placeholder={formData.anthropicApiKey === '***' ? 'API key is set (edit to change)' : 'sk-ant-...'}
-              className="settings-input"
-            />
+            <select
+              id="active-model"
+              value={formData.activeModel}
+              onChange={(e) => handleInputChange('activeModel', e.target.value)}
+              className="settings-select"
+              disabled={loadingModels[formData.activeProviderId]}
+            >
+              <option value="">Default model</option>
+              {availableModels[formData.activeProviderId]?.map(model => (
+                <option key={model.id} value={model.id}>
+                  {model.name} {model.description && `- ${model.description}`}
+                </option>
+              ))}
+            </select>
             <p className="settings-hint">
-              Used for Claude models.{' '}
-              <a href="https://console.anthropic.com/account/keys" target="_blank" rel="noopener noreferrer">
-                Get your API key
-              </a>
+              Leave as "Default model" to use the provider's recommended model.
             </p>
           </div>
         </section>
 
         <section className="settings-section">
-          <h2 className="settings-section-title">Model Preferences</h2>
+          <h2 className="settings-section-title">Embedding Model</h2>
           <p className="settings-section-description">
-            Choose your default language model for chat interactions.
+            Choose the embedding model for semantic search. Smaller models are faster but may be less accurate.
           </p>
 
           <div className="settings-field">
-            <label className="settings-label" htmlFor="default-model">
-              Default Model
+            <label className="settings-label" htmlFor="embedding-model">
+              Model
             </label>
             <select
-              id="default-model"
-              value={formData.defaultModel}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleInputChange('defaultModel', e.target.value)}
+              id="embedding-model"
+              value={formData.embeddingModel}
+              onChange={(e) => handleInputChange('embeddingModel', e.target.value)}
               className="settings-select"
             >
-              <option value="ollama">Ollama (Local)</option>
-              <option value="gpt-4">GPT-4</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="claude-3-opus">Claude 3 Opus</option>
-              <option value="claude-3-sonnet">Claude 3 Sonnet</option>
-              <option value="claude-3-haiku">Claude 3 Haiku</option>
+              <option value="bge-base">
+                BAAI/bge-base-en-v1.5 (768 dim) - Best quality, slower
+              </option>
+              <option value="specter">
+                SPECTER (768 dim) - Optimized for scientific papers
+              </option>
+              <option value="minilm-l6">
+                all-MiniLM-L6-v2 (384 dim) - Good quality, faster
+              </option>
+              <option value="minilm-l3">
+                paraphrase-MiniLM-L3-v2 (384 dim) - Moderate quality, fastest
+              </option>
             </select>
-            <p className="settings-hint">
-              This model will be used by default for all chat interactions.
+            <p className="settings-hint settings-warning">
+              ⚠️ Changing the embedding model requires re-indexing your library. The new model will be used for new documents and queries, but existing embeddings will remain incompatible until you re-index.
             </p>
           </div>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Provider Configuration</h2>
+          <p className="settings-section-description">
+            Configure your LLM providers. Enable the ones you want to use and provide credentials.
+          </p>
+
+          {availableProviders.map(provider => {
+            const config = formData.providers[provider.id];
+            const validation = providerValidation[provider.id];
+            const isValidating = validatingProvider === provider.id;
+
+            return (
+              <div key={provider.id} className="provider-config-card">
+                <div className="provider-header">
+                  <label className="provider-toggle">
+                    <input
+                      type="checkbox"
+                      checked={config?.enabled || false}
+                      onChange={(e) => handleProviderEnabledChange(provider.id, e.target.checked)}
+                    />
+                    <span className="provider-name">{provider.label}</span>
+                  </label>
+                  {validation && (
+                    <span className={`provider-status ${validation.valid ? 'valid' : 'invalid'}`}>
+                      {validation.valid ? '✓ Connected' : '✗ ' + validation.message}
+                    </span>
+                  )}
+                </div>
+
+                {config?.enabled && (
+                  <div className="provider-credentials">
+                    {provider.requires_api_key && (
+                      <div className="settings-field">
+                        <label className="settings-label" htmlFor={`${provider.id}-api-key`}>
+                          API Key
+                        </label>
+                        <Input
+                          id={`${provider.id}-api-key`}
+                          type={config.credentials.api_key === '***' ? 'text' : 'password'}
+                          value={config.credentials.api_key || ''}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            handleProviderCredentialChange(provider.id, 'api_key', e.target.value)
+                          }
+                          placeholder={config.credentials.api_key === '***' ? 'API key is set' : 'Enter API key'}
+                          className="settings-input"
+                        />
+                      </div>
+                    )}
+                    
+                    {provider.id === 'ollama' && (
+                      <div className="settings-field">
+                        <label className="settings-label" htmlFor="ollama-base-url">
+                          Base URL
+                        </label>
+                        <Input
+                          id="ollama-base-url"
+                          type="text"
+                          value={config.credentials.base_url || 'http://localhost:11434'}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            handleProviderCredentialChange(provider.id, 'base_url', e.target.value)
+                          }
+                          className="settings-input"
+                        />
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={() => validateProvider(provider.id)}
+                      variant="secondary"
+                      disabled={isValidating}
+                    >
+                      {isValidating ? 'Testing...' : 'Test Connection'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </section>
 
         <section className="settings-section">
@@ -163,21 +342,16 @@ const Settings: React.FC = () => {
             <label className="settings-label" htmlFor="zotero-path">
               Zotero Database Path
             </label>
-            <div className="settings-input-group">
-              <Input
-                id="zotero-path"
-                type="text"
-                value={formData.zoteroPath}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('zoteroPath', e.target.value)}
-                placeholder="/Users/username/Zotero/zotero.sqlite"
-                className="settings-input"
-              />
-              <Button onClick={handleBrowseZotero} variant="secondary">
-                Browse
-              </Button>
-            </div>
+            <Input
+              id="zotero-path"
+              type="text"
+              value={formData.zoteroPath}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('zoteroPath', e.target.value)}
+              placeholder="/Users/username/Zotero/zotero.sqlite"
+              className="settings-input"
+            />
             <p className="settings-hint">
-              Path to your zotero.sqlite database file. Usually located in your Zotero data directory.
+              Path to your zotero.sqlite database file.
             </p>
           </div>
 
@@ -194,7 +368,7 @@ const Settings: React.FC = () => {
               className="settings-input"
             />
             <p className="settings-hint">
-              Path where the ChromaDB vector database will be stored. Used for semantic search.
+              Path where the ChromaDB vector database will be stored.
             </p>
           </div>
         </section>

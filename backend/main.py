@@ -8,19 +8,35 @@ from backend.pdf import PDF
 from backend.zotero_dbase import ZoteroLibrary
 from fastapi.middleware.cors import CORSMiddleware
 from backend.interface import ZoteroChatbot
+from backend.vector_db import ChromaClient
 from backend.embed_utils import get_embedding
+from backend.profile_manager import ProfileManager
 import os
 import json
 from pathlib import Path
 
 app = FastAPI()
 
-# Settings file path
-SETTINGS_DIR = Path.home() / ".zotero-llm"
-SETTINGS_FILE = SETTINGS_DIR / "settings.json"
-
-# Ensure settings directory exists
-SETTINGS_DIR.mkdir(parents=True, exist_ok=True) 
+# Initialize profile manager
+try:
+    profile_manager = ProfileManager()
+    print(f"ProfileManager initialized at: {profile_manager.BASE_DIR}")
+    
+    # Get active profile (will create default if none exists)
+    active_profile = profile_manager.get_active_profile()
+    if not active_profile:
+        print("WARNING: No active profile found, attempting to create default...")
+        active_profile = profile_manager.get_active_profile()  # Should auto-create
+    
+    if active_profile:
+        print(f"Active profile: {active_profile['id']} - {active_profile['name']}")
+    else:
+        raise RuntimeError("Failed to initialize profile system")
+except Exception as e:
+    print(f"ERROR initializing profile system: {e}")
+    import traceback
+    traceback.print_exc()
+    raise 
 
 # CORS setup: matches your frontend HTML server (e.g., http://localhost:8080)
 app.add_middleware(
@@ -36,8 +52,174 @@ app.add_middleware(
 DB_PATH = "/Users/aahepburn/Zotero/zotero.sqlite"
 CHROMA_PATH = "/Users/aahepburn/.zotero-llm/chroma/user-1"
 
-# Instantiate the main chatbot object
-chatbot = ZoteroChatbot(DB_PATH, CHROMA_PATH)
+
+def load_settings(profile_id: str = None):
+    """Load settings from profile storage.
+    
+    Args:
+        profile_id: Profile ID to load settings from. If None, uses active profile.
+    """
+    if profile_id is None:
+        active = profile_manager.get_active_profile()
+        if not active:
+            raise RuntimeError("No active profile")
+        profile_id = active['id']
+    
+    default_settings = {
+        "activeProviderId": "ollama",
+        "activeModel": "",
+        "embeddingModel": "bge-base",
+        "zoteroPath": DB_PATH,
+        "chromaPath": CHROMA_PATH,
+        "providers": {
+            "ollama": {
+                "enabled": True,
+                "credentials": {
+                    "base_url": "http://localhost:11434"
+                }
+            },
+            "openai": {
+                "enabled": False,
+                "credentials": {
+                    "api_key": ""
+                }
+            },
+            "anthropic": {
+                "enabled": False,
+                "credentials": {
+                    "api_key": ""
+                }
+            },
+            "perplexity": {
+                "enabled": False,
+                "credentials": {
+                    "api_key": ""
+                }
+            },
+            "google": {
+                "enabled": False,
+                "credentials": {
+                    "api_key": ""
+                }
+            },
+            "groq": {
+                "enabled": False,
+                "credentials": {
+                    "api_key": ""
+                }
+            },
+            "openrouter": {
+                "enabled": False,
+                "credentials": {
+                    "api_key": ""
+                }
+            }
+        }
+    }
+    
+    # Load profile-specific settings
+    saved_settings = profile_manager.load_profile_settings(profile_id)
+    if saved_settings:
+        try:
+            # Migrate old settings format if needed
+            if "openaiApiKey" in saved_settings or "anthropicApiKey" in saved_settings:
+                    # Old format - migrate to new
+                    migrated = default_settings.copy()
+                    
+                    if saved_settings.get("openaiApiKey"):
+                        migrated["providers"]["openai"]["credentials"]["api_key"] = saved_settings["openaiApiKey"]
+                        migrated["providers"]["openai"]["enabled"] = True
+                    
+                    if saved_settings.get("anthropicApiKey"):
+                        migrated["providers"]["anthropic"]["credentials"]["api_key"] = saved_settings["anthropicApiKey"]
+                        migrated["providers"]["anthropic"]["enabled"] = True
+                    
+                    if saved_settings.get("zoteroPath"):
+                        migrated["zoteroPath"] = saved_settings["zoteroPath"]
+                    
+                    if saved_settings.get("chromaPath"):
+                        migrated["chromaPath"] = saved_settings["chromaPath"]
+                    
+                    # Migrate defaultModel
+                    if saved_settings.get("defaultModel"):
+                        old_model = saved_settings["defaultModel"]
+                        if old_model == "ollama":
+                            migrated["activeProviderId"] = "ollama"
+                        elif old_model.startswith("gpt"):
+                            migrated["activeProviderId"] = "openai"
+                            migrated["activeModel"] = old_model
+                        elif old_model.startswith("claude"):
+                            migrated["activeProviderId"] = "anthropic"
+                            migrated["activeModel"] = old_model
+                    
+                    # Save migrated settings
+                    save_settings(migrated, profile_id)
+                    return migrated
+            else:
+                # New format - merge with defaults
+                merged = default_settings.copy()
+                merged.update(saved_settings)
+                
+                # Ensure all providers exist in settings
+                if "providers" in saved_settings:
+                    for provider_id in default_settings["providers"]:
+                        if provider_id not in merged["providers"]:
+                            merged["providers"][provider_id] = default_settings["providers"][provider_id]
+                
+                return merged
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+            return default_settings
+    else:
+        return default_settings
+
+
+def save_settings(settings: dict, profile_id: str = None):
+    """Save settings to profile storage.
+    
+    Args:
+        settings: Settings dictionary
+        profile_id: Profile ID to save to. If None, uses active profile.
+    """
+    if profile_id is None:
+        active = profile_manager.get_active_profile()
+        if not active:
+            return False
+        profile_id = active['id']
+    
+    return profile_manager.save_profile_settings(profile_id, settings)
+
+
+# Instantiate the main chatbot object with provider settings
+def initialize_chatbot():
+    """Initialize chatbot with current profile settings."""
+    active = profile_manager.get_active_profile()
+    if not active:
+        raise RuntimeError("No active profile")
+    
+    settings = load_settings(active['id'])
+    
+    # Extract provider credentials
+    provider_credentials = {}
+    for provider_id, provider_config in settings.get("providers", {}).items():
+        if provider_config.get("enabled"):
+            provider_credentials[provider_id] = provider_config.get("credentials", {})
+    
+    # Use profile-specific chroma path if not customized
+    chroma_path = settings.get("chromaPath")
+    if not chroma_path:
+        chroma_path = profile_manager.get_profile_chroma_path(active['id'])
+    
+    return ZoteroChatbot(
+        db_path=settings.get("zoteroPath", DB_PATH),
+        chroma_path=chroma_path,
+        active_provider_id=settings.get("activeProviderId", "ollama"),
+        active_model=settings.get("activeModel"),
+        credentials=provider_credentials,
+        embedding_model_id=settings.get("embeddingModel", "bge-base")
+    )
+
+chatbot = initialize_chatbot()
 
 @app.get("/")
 def read_root():
@@ -140,8 +322,9 @@ def chat(query: str, item_ids: Optional[str] = Query("", description="Comma sepa
 
 @app.post("/chat")
 def chat_post(payload: dict = Body(...)):
-    """POST-style chat endpoint that accepts JSON body: {"query": "...", "item_ids": ["id1","id2"]}
+    """POST-style chat endpoint that accepts JSON body: {"query": "...", "item_ids": ["id1","id2"], "session_id": "..."}
     This mirrors the GET `/chat` endpoint but is easier for clients that send JSON.
+    Supports stateful conversations via session_id.
     """
     try:
         query = payload.get("query")
@@ -157,7 +340,15 @@ def chat_post(payload: dict = Body(...)):
         else:
             filter_ids = []
 
-        payload_out = chatbot.chat(query, filter_item_ids=filter_ids if filter_ids else None)
+        # Extract session_id for stateful conversation
+        session_id = payload.get("session_id")
+
+        payload_out = chatbot.chat(
+            query, 
+            filter_item_ids=filter_ids if filter_ids else None,
+            session_id=session_id
+        )
+        print(f"Endpoint returning payload_out with generated_title: {payload_out.get('generated_title')}")
         return payload_out
     except Exception as e:
         error_msg = str(e)
@@ -231,7 +422,47 @@ def index_stats():
             "total_chunks": total_chunks,
             "zotero_items": len(zotero_item_ids),
             "new_items": len(new_item_ids),
-            "needs_sync": len(new_item_ids) > 0
+            "needs_sync": len(new_item_ids) > 0,
+            "current_embedding_model": chatbot.embedding_model_id,
+            "collection_name": chatbot.chroma.collection_name
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/embedding_collections")
+def list_embedding_collections():
+    """List all available embedding model collections in the database.
+    Shows which embedding models have been used to index the library.
+    """
+    try:
+        settings = load_settings()
+        chroma_path = settings.get("chromaPath", CHROMA_PATH)
+        
+        # Create a temporary ChromaDB client to list collections
+        import chromadb
+        from chromadb.config import Settings
+        client = chromadb.PersistentClient(path=chroma_path, settings=Settings())
+        
+        collections = client.list_collections()
+        
+        # Parse collection names to extract embedding models
+        embedding_collections = []
+        for col in collections:
+            # Collection names follow pattern: zotero_lib_{embedding_model_id}
+            if col.name.startswith("zotero_lib_"):
+                embedding_model_id = col.name.replace("zotero_lib_", "")
+                item_count = col.count()
+                embedding_collections.append({
+                    "collection_name": col.name,
+                    "embedding_model_id": embedding_model_id,
+                    "item_count": item_count,
+                    "is_current": embedding_model_id == chatbot.embedding_model_id
+                })
+        
+        return {
+            "collections": embedding_collections,
+            "current_embedding_model": chatbot.embedding_model_id
         }
     except Exception as e:
         return {"error": str(e)}
@@ -274,7 +505,7 @@ def open_pdf(payload: dict = Body(...)):
 
 @app.get("/ollama_status")
 def ollama_status():
-    """Check if Ollama is running and responsive."""
+    """Check if Ollama is running and responsive (deprecated - use /providers/ollama/status)."""
     import requests
     try:
         resp = requests.get("http://localhost:11434/api/tags", timeout=2)
@@ -295,37 +526,136 @@ def ollama_status():
         return {"status": "error", "message": str(e)}
 
 
-def load_settings():
-    """Load settings from JSON file."""
-    default_settings = {
-        "openaiApiKey": "",
-        "anthropicApiKey": "",
-        "defaultModel": "ollama",
-        "zoteroPath": DB_PATH,
-        "chromaPath": CHROMA_PATH,
-    }
-    
-    if SETTINGS_FILE.exists():
-        try:
-            with open(SETTINGS_FILE, 'r') as f:
-                saved_settings = json.load(f)
-                # Merge with defaults to ensure all keys exist
-                return {**default_settings, **saved_settings}
-        except Exception as e:
-            print(f"Error loading settings: {e}")
-            return default_settings
-    return default_settings
-
-
-def save_settings(settings: dict):
-    """Save settings to JSON file."""
+@app.get("/embedding_models")
+def list_embedding_models():
+    """List all available embedding models."""
+    from backend.embed_utils import EMBEDDING_MODELS
     try:
-        with open(SETTINGS_FILE, 'w') as f:
-            json.dump(settings, f, indent=2)
-        return True
+        models = [
+            {
+                "id": model_id,
+                **config
+            }
+            for model_id, config in EMBEDDING_MODELS.items()
+        ]
+        return {"models": models}
     except Exception as e:
-        print(f"Error saving settings: {e}")
-        return False
+        return {"error": str(e)}
+
+
+@app.get("/providers")
+def list_providers():
+    """List all available LLM providers and their metadata."""
+    from backend.model_providers import get_provider_info
+    try:
+        providers = get_provider_info()
+        return {"providers": providers}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/providers/{provider_id}/models")
+def list_provider_models(provider_id: str):
+    """List available models for a specific provider."""
+    from backend.model_providers import get_provider
+    try:
+        provider = get_provider(provider_id)
+        if not provider:
+            return {"error": f"Provider '{provider_id}' not found"}
+        
+        settings = load_settings()
+        provider_config = settings.get("providers", {}).get(provider_id, {})
+        credentials = provider_config.get("credentials", {})
+        
+        models = provider.list_models(credentials)
+        
+        return {
+            "models": [
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "description": m.description,
+                    "context_length": m.context_length
+                }
+                for m in models
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/providers/{provider_id}/validate")
+def validate_provider(provider_id: str, credentials: dict = Body(...)):
+    """Validate credentials for a specific provider."""
+    from backend.model_providers import get_provider
+    try:
+        provider = get_provider(provider_id)
+        if not provider:
+            return {"error": f"Provider '{provider_id}' not found", "valid": False}
+        
+        # Use provided credentials or get from settings
+        creds = credentials.get("credentials", {})
+        if not creds:
+            settings = load_settings()
+            provider_config = settings.get("providers", {}).get(provider_id, {})
+            creds = provider_config.get("credentials", {})
+        
+        is_valid = provider.validate_credentials(creds)
+        return {"valid": is_valid, "provider": provider_id}
+    except Exception as e:
+        error_msg = str(e)
+        # Determine error type
+        if "authentication" in error_msg.lower() or "api key" in error_msg.lower():
+            return {"valid": False, "error": "Invalid credentials", "details": error_msg}
+        elif "connection" in error_msg.lower():
+            return {"valid": False, "error": "Connection failed", "details": error_msg}
+        else:
+            return {"valid": False, "error": error_msg}
+
+
+@app.get("/providers/{provider_id}/status")
+def provider_status(provider_id: str):
+    """Check the status and availability of a specific provider."""
+    from backend.model_providers import get_provider
+    try:
+        provider = get_provider(provider_id)
+        if not provider:
+            return {"status": "unknown", "error": f"Provider '{provider_id}' not found"}
+        
+        settings = load_settings()
+        provider_config = settings.get("providers", {}).get(provider_id, {})
+        
+        if not provider_config.get("enabled"):
+            return {
+                "status": "disabled",
+                "provider": provider_id,
+                "message": "Provider is disabled in settings"
+            }
+        
+        credentials = provider_config.get("credentials", {})
+        
+        try:
+            is_valid = provider.validate_credentials(credentials)
+            if is_valid:
+                return {
+                    "status": "available",
+                    "provider": provider_id,
+                    "label": provider.label
+                }
+            else:
+                return {
+                    "status": "unavailable",
+                    "provider": provider_id,
+                    "message": "Credentials validation failed"
+                }
+        except Exception as validation_error:
+            return {
+                "status": "error",
+                "provider": provider_id,
+                "message": str(validation_error)
+            }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 @app.get("/settings")
@@ -333,13 +663,145 @@ def get_settings():
     """Get current application settings."""
     try:
         settings = load_settings()
-        # Don't send full API keys to frontend for security
-        # Just indicate if they're set
+        
+        # Mask API keys for security - don't send full keys to frontend
+        masked_settings = settings.copy()
+        if "providers" in masked_settings:
+            masked_providers = {}
+            for provider_id, provider_config in masked_settings["providers"].items():
+                masked_provider = provider_config.copy()
+                if "credentials" in masked_provider:
+                    masked_creds = masked_provider["credentials"].copy()
+                    if "api_key" in masked_creds and masked_creds["api_key"]:
+                        masked_creds["api_key"] = "***"
+                    masked_provider["credentials"] = masked_creds
+                masked_providers[provider_id] = masked_provider
+            masked_settings["providers"] = masked_providers
+        
+        return masked_settings
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/profiles")
+def list_profiles():
+    """List all available profiles."""
+    try:
+        profiles = profile_manager.list_profiles()
+        active = profile_manager.get_active_profile()
         return {
-            **settings,
-            "openaiApiKey": "***" if settings.get("openaiApiKey") else "",
-            "anthropicApiKey": "***" if settings.get("anthropicApiKey") else "",
+            "profiles": profiles,
+            "activeProfileId": active['id'] if active else None
         }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/profiles")
+def create_profile(payload: dict = Body(...)):
+    """Create a new profile.
+    
+    Expects JSON body: {"id": "my-profile", "name": "My Profile", "description": "Optional"}
+    """
+    try:
+        profile_id = payload.get("id")
+        name = payload.get("name")
+        description = payload.get("description", "")
+        
+        if not profile_id or not name:
+            return {"error": "Missing required fields: id, name"}
+        
+        metadata = profile_manager.create_profile(profile_id, name, description)
+        return {"success": True, "profile": metadata}
+    except ValueError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/profiles/{profile_id}")
+def get_profile(profile_id: str):
+    """Get metadata for a specific profile."""
+    try:
+        profile = profile_manager.get_profile(profile_id)
+        if not profile:
+            return {"error": f"Profile '{profile_id}' not found"}
+        return {"profile": profile}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/profiles/{profile_id}")
+def update_profile(profile_id: str, payload: dict = Body(...)):
+    """Update profile metadata.
+    
+    Expects JSON body: {"name": "New Name", "description": "New Description"}
+    """
+    try:
+        name = payload.get("name")
+        description = payload.get("description")
+        
+        success = profile_manager.update_profile(profile_id, name, description)
+        if not success:
+            return {"error": f"Profile '{profile_id}' not found"}
+        
+        return {"success": True, "profile": profile_manager.get_profile(profile_id)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.delete("/profiles/{profile_id}")
+def delete_profile(profile_id: str, force: bool = Query(False)):
+    """Delete a profile and all its data."""
+    try:
+        success = profile_manager.delete_profile(profile_id, force=force)
+        if not success:
+            return {"error": f"Profile '{profile_id}' not found"}
+        return {"success": True}
+    except ValueError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/profiles/{profile_id}/activate")
+def activate_profile(profile_id: str):
+    """Set the active profile."""
+    try:
+        success = profile_manager.set_active_profile(profile_id)
+        if not success:
+            return {"error": f"Profile '{profile_id}' not found"}
+        
+        # Reinitialize chatbot with new profile
+        global chatbot
+        chatbot = initialize_chatbot()
+        
+        return {
+            "success": True,
+            "activeProfile": profile_manager.get_active_profile()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/profiles/{profile_id}/sessions")
+def get_profile_sessions(profile_id: str):
+    """Get sessions for a specific profile."""
+    try:
+        sessions_data = profile_manager.load_profile_sessions(profile_id)
+        return sessions_data
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/profiles/{profile_id}/sessions")
+def save_profile_sessions(profile_id: str, sessions_data: dict = Body(...)):
+    """Save sessions for a specific profile."""
+    try:
+        success = profile_manager.save_profile_sessions(profile_id, sessions_data)
+        if not success:
+            return {"error": "Failed to save sessions"}
+        return {"success": True}
     except Exception as e:
         return {"error": str(e)}
 
@@ -350,23 +812,84 @@ def update_settings(settings: dict = Body(...)):
     try:
         current_settings = load_settings()
         
-        # Handle API keys specially - only update if not masked
-        for key in ["openaiApiKey", "anthropicApiKey"]:
-            if key in settings:
-                # If frontend sends "***", keep the existing key
-                if settings[key] == "***":
-                    settings[key] = current_settings.get(key, "")
+        # Deep copy to avoid mutation issues
+        import copy
+        updated_settings = copy.deepcopy(current_settings)
         
-        # Update settings
-        updated_settings = {**current_settings, **settings}
+        # Handle masked API keys - preserve existing keys if "***" is sent
+        # Process providers specially to handle credentials correctly
+        if "providers" in settings:
+            for provider_id, provider_config in settings.get("providers", {}).items():
+                # Initialize provider if it doesn't exist
+                if provider_id not in updated_settings["providers"]:
+                    updated_settings["providers"][provider_id] = {
+                        "enabled": False,
+                        "credentials": {}
+                    }
+                
+                # Update enabled status
+                if "enabled" in provider_config:
+                    updated_settings["providers"][provider_id]["enabled"] = provider_config["enabled"]
+                
+                # Handle credentials with masking logic
+                if "credentials" in provider_config:
+                    current_creds = updated_settings["providers"][provider_id].get("credentials", {})
+                    new_creds = provider_config["credentials"]
+                    
+                    # Merge credentials, preserving masked keys
+                    for key, value in new_creds.items():
+                        if key == "api_key" and value == "***":
+                            # Keep existing API key if new value is masked
+                            if "api_key" in current_creds:
+                                updated_settings["providers"][provider_id]["credentials"]["api_key"] = current_creds["api_key"]
+                        else:
+                            # Update with new value
+                            updated_settings["providers"][provider_id]["credentials"][key] = value
+        
+        # Update top-level settings (but not providers, already handled)
+        for key, value in settings.items():
+            if key != "providers":
+                updated_settings[key] = value
         
         if save_settings(updated_settings):
             # Update global paths if they changed
-            global DB_PATH, CHROMA_PATH
+            global DB_PATH, CHROMA_PATH, chatbot
             if "zoteroPath" in settings:
                 DB_PATH = settings["zoteroPath"]
             if "chromaPath" in settings:
                 CHROMA_PATH = settings["chromaPath"]
+            
+            # Reinitialize chatbot with new provider or embedding settings
+            if "activeProviderId" in settings or "activeModel" in settings or "embeddingModel" in settings:
+                try:
+                    provider_credentials = {}
+                    for pid, pconfig in updated_settings.get("providers", {}).items():
+                        if pconfig.get("enabled"):
+                            provider_credentials[pid] = pconfig.get("credentials", {})
+                    
+                    # Update provider settings if changed
+                    if "activeProviderId" in settings or "activeModel" in settings:
+                        chatbot.update_provider_settings(
+                            active_provider_id=updated_settings.get("activeProviderId", "ollama"),
+                            active_model=updated_settings.get("activeModel"),
+                            credentials=provider_credentials
+                        )
+                    
+                    # Update embedding model if changed - requires new ChromaClient
+                    if "embeddingModel" in settings:
+                        new_embedding_model = updated_settings.get("embeddingModel", "bge-base")
+                        old_embedding_model = chatbot.embedding_model_id
+                        if new_embedding_model != old_embedding_model:
+                            print(f"Switching embedding model from {old_embedding_model} to {new_embedding_model}")
+                            print(f"Creating new ChromaClient with collection: zotero_lib_{new_embedding_model}")
+                            chatbot.embedding_model_id = new_embedding_model
+                            # Reinitialize ChromaClient with new embedding model
+                            chroma_path = updated_settings.get("chromaPath", CHROMA_PATH)
+                            chatbot.chroma = ChromaClient(chroma_path, embedding_model_id=new_embedding_model)
+                        else:
+                            print(f"Embedding model unchanged: {chatbot.embedding_model_id}")
+                except Exception as e:
+                    print(f"Warning: Failed to update chatbot settings: {e}")
             
             return {"success": True, "message": "Settings saved successfully"}
         else:

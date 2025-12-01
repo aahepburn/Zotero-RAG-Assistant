@@ -22,8 +22,11 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
   const sessions = useSessions();
 
   async function sendMessage(content: string) {
+    // Get current session ID to enable stateful conversation
+    let sessionId = sessions.currentSessionId;
+    
     // send via the chat hook, which returns created messages and the response
-    const result = await rawSendMessage(content);
+    const result = await rawSendMessage(content, sessionId || undefined);
     if (!result) return;
 
     const { userMessage, assistantMessage, response } = result;
@@ -33,8 +36,9 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
     console.debug("chat response:", response);
     const citations = (response as any).citations ?? (response as any).sources ?? [];
     const snippets = (response as any).snippets ?? (response as any).results ?? [];
+    const generatedTitle = (response as any).generated_title;
+    console.log("Extracted generatedTitle from response:", generatedTitle);
 
-    let sessionId = sessions.currentSessionId;
     if (!sessionId) {
       const initialSources = (citations || []).map((c: any) => ({
         id: String(c.id ?? c.key ?? c.zoteroKey ?? c.itemKey ?? c.item_id ?? c.key ?? c.UUID ?? ""),
@@ -54,13 +58,26 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
         authors: s.authors ?? undefined,
         year: s.year ?? undefined,
       } as SessionSnippet));
-      sessionId = sessions.createSession(userMessage.content, response.summary, initialSources, initialSnippets);
+      
+      // Use generated title if available, otherwise use first part of user message
+      sessionId = sessions.createSession(
+        userMessage.content, 
+        response.summary, 
+        initialSources, 
+        initialSnippets,
+        generatedTitle  // Custom title from LLM
+      );
     } else {
       // convert to session Message shape and append to existing session
       const u: SessionMessage = { id: userMessage.id, role: "user", content: userMessage.content, createdAt: new Date().toISOString() };
       const a: SessionMessage = { id: assistantMessage.id, role: "assistant", content: assistantMessage.content, createdAt: new Date().toISOString() };
       sessions.appendMessage(sessionId, u);
       sessions.appendMessage(sessionId, a);
+
+      // Update session title if LLM generated one (first message in session)
+      if (generatedTitle) {
+        sessions.updateSessionTitle(sessionId, generatedTitle);
+      }
 
       // upsert sources (robust mapping)
       (citations || []).forEach((c: any) => {

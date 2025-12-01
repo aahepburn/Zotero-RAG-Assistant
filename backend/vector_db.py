@@ -14,12 +14,16 @@ class ChromaClient:
     
     IMPORTANT: This class expects pre-computed embeddings and does NOT use ChromaDB's 
     default embedding function. All embeddings must be generated using get_embedding() 
-    from embed_utils.py to ensure consistent 768-dimensional vectors.
+    from embed_utils.py to ensure consistent dimensional vectors.
+    
+    Each embedding model gets its own collection to prevent dimension mismatch errors.
     """
 
-    def __init__(self, db_path: str, collection_name: str = "zotero_lib"):
+    def __init__(self, db_path: str, collection_name: str = "zotero_lib", embedding_model_id: str = "bge-base"):
         self.db_path = db_path
-        self.collection_name = collection_name
+        self.embedding_model_id = embedding_model_id
+        # Include embedding model in collection name to avoid dimension conflicts
+        self.collection_name = f"{collection_name}_{embedding_model_id}"
         os.makedirs(self.db_path, exist_ok=True)
         self.chroma_client = chromadb.PersistentClient(path=self.db_path, settings=Settings())
         
@@ -27,14 +31,18 @@ class ChromaClient:
         # This prevents ChromaDB from using its default all-MiniLM-L6-v2 (384 dims)
         self.collection = self.chroma_client.get_or_create_collection(
             name=self.collection_name,
-            metadata={"hnsw:space": "cosine"}  # Use cosine similarity for retrieval
+            metadata={
+                "hnsw:space": "cosine",  # Use cosine similarity for retrieval
+                "embedding_model": embedding_model_id  # Track which model created this collection
+            }
         )
         
         # BM25 index for sparse retrieval (loaded lazily)
+        # Each embedding model has its own BM25 index
         self.bm25_index = None
         self.bm25_corpus = None
         self.bm25_ids = None
-        self.bm25_path = os.path.join(self.db_path, "bm25_index.pkl")
+        self.bm25_path = os.path.join(self.db_path, f"bm25_index_{embedding_model_id}.pkl")
 
     def add_chunks(self,
         ids: List[str],
@@ -119,7 +127,7 @@ class ChromaClient:
         
         return results
     
-    def query_hybrid(self, query: str, k: int = 10, where: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def query_hybrid(self, query: str, k: int = 10, where: Optional[Dict[str, Any]] = None, embedding_model_id: str = "bge-base") -> Dict[str, Any]:
         """Hybrid search combining dense (semantic) and sparse (BM25) retrieval.
         
         Best practice from Reddit thread: Retrieve top-k from both methods,
@@ -129,14 +137,15 @@ class ChromaClient:
             query: Search query
             k: Number of results from each method
             where: Optional metadata filter
+            embedding_model_id: ID of the embedding model to use (default: "bge-base")
             
         Returns:
             Combined results dict with documents, metadatas, and distances
         """
         from backend.embed_utils import get_embedding
         
-        # CRITICAL: Manually embed query to ensure 768-dimensional embedding
-        query_embedding = get_embedding(query)
+        # Embed query using the configured embedding model
+        query_embedding = get_embedding(query, model_id=embedding_model_id)
         
         # Get dense retrieval results
         dense_results = self.collection.query(

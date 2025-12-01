@@ -6,3 +6,26 @@ node_modules/
 .env
 backend/sample_pdfs/
 backend/.DS_Store
+
+# User-specific profile data and settings
+# These contain API keys, local paths, and personal data
+.zotero-llm/
+profiles/
+active_profile.json
+settings.json
+*.sqlite3
+*.sqlite3-journal
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

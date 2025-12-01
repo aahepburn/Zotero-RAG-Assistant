@@ -32,5 +32,77 @@ Researchers deserve to talk to their own libraries as easily as sending a messag
 
 ---
 
+## Quick Start
+
+### Prerequisites
+
+- Python 3.8+
+- Node.js 16+
+- Zotero desktop app with a local library
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/aahepburn/zotero-llm-plugin.git
+cd zotero-llm-plugin
+
+# Run the setup script
+./setup.sh
+
+# Or manually:
+# 1. Create Python virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install Python dependencies
+pip install -r requirements.txt
+
+# 3. Install frontend dependencies
+cd frontend && npm install && cd ..
+
+# 4. Configure your settings
+cp .env.example .env
+# Edit .env and set your ZOTERO_DB_PATH
+```
+
+### Configuration
+
+1. **Zotero Database Path**: Edit `.env` or configure in Settings UI
+   - macOS default: `/Users/YOUR_USERNAME/Zotero/zotero.sqlite`
+   - Windows: `C:\Users\YOUR_USERNAME\Zotero\zotero.sqlite`
+   - Linux: `~/Zotero/zotero.sqlite`
+
+2. **LLM Provider** (choose one):
+   - **Ollama** (recommended, free, local): Install from [ollama.ai](https://ollama.ai) and run `ollama serve`
+   - **OpenAI**: Add API key in Settings
+   - **Anthropic Claude**: Add API key in Settings
+   - **Other providers**: Perplexity, Google, Groq, OpenRouter supported
+
+3. **API Keys** (optional): Configure via the Settings UI after starting the app, or set in `.env`
+
+### Running the Application
+
+```bash
+# Terminal 1: Start backend
+source .venv/bin/activate
+uvicorn backend.main:app --reload
+
+# Terminal 2: Start frontend
+cd frontend
+npm run dev
+```
+
+Open http://localhost:5173 in your browser.
+
+### First Steps
+
+1. **Index your library**: Click "Index Library" to process your PDFs
+2. **Start chatting**: Ask questions about your research
+3. **View sources**: Check the Evidence Panel to see citations and snippets
+4. **Configure settings**: Adjust LLM provider, embedding model, and paths as needed
+
+---
+
 ## Repository Structure
 

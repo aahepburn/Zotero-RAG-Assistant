@@ -1,11 +1,38 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+export interface ProviderCredentials {
+  api_key?: string;
+  base_url?: string;
+  [key: string]: string | undefined;
+}
+
+export interface ProviderConfig {
+  enabled: boolean;
+  credentials: ProviderCredentials;
+}
+
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  default_model: string;
+  supports_streaming: boolean;
+  requires_api_key: boolean;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+  context_length?: number;
+}
+
 export interface Settings {
-  openaiApiKey: string;
-  anthropicApiKey: string;
-  defaultModel: string;
+  activeProviderId: string;
+  activeModel: string;
+  embeddingModel: string;
   zoteroPath: string;
   chromaPath: string;
+  providers: Record<string, ProviderConfig>;
 }
 
 interface SettingsContextType {
@@ -13,14 +40,48 @@ interface SettingsContextType {
   updateSettings: (newSettings: Partial<Settings>) => Promise<void>;
   loading: boolean;
   error: string | null;
+  availableProviders: ProviderInfo[];
+  loadProviders: () => Promise<void>;
 }
 
 const defaultSettings: Settings = {
-  openaiApiKey: '',
-  anthropicApiKey: '',
-  defaultModel: 'ollama',
+  activeProviderId: 'ollama',
+  activeModel: '',
+  embeddingModel: 'bge-base',
   zoteroPath: '',
   chromaPath: '',
+  providers: {
+    ollama: {
+      enabled: true,
+      credentials: {
+        base_url: 'http://localhost:11434'
+      }
+    },
+    openai: {
+      enabled: false,
+      credentials: { api_key: '' }
+    },
+    anthropic: {
+      enabled: false,
+      credentials: { api_key: '' }
+    },
+    perplexity: {
+      enabled: false,
+      credentials: { api_key: '' }
+    },
+    google: {
+      enabled: false,
+      credentials: { api_key: '' }
+    },
+    groq: {
+      enabled: false,
+      credentials: { api_key: '' }
+    },
+    openrouter: {
+      enabled: false,
+      credentials: { api_key: '' }
+    }
+  }
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -29,6 +90,20 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availableProviders, setAvailableProviders] = useState<ProviderInfo[]>([]);
+
+  // Load available providers from backend
+  const loadProviders = async () => {
+    try {
+      const response = await fetch('/providers');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableProviders(data.providers || []);
+      }
+    } catch (err) {
+      console.error('Failed to load providers:', err);
+    }
+  };
 
   // Load settings from backend on mount
   useEffect(() => {
@@ -39,11 +114,21 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           const text = await response.text();
           try {
             const data = JSON.parse(text);
-            setSettings(data);
+            
+            // Merge with defaults to ensure all providers exist
+            const mergedSettings = {
+              ...defaultSettings,
+              ...data,
+              providers: {
+                ...defaultSettings.providers,
+                ...(data.providers || {})
+              }
+            };
+            
+            setSettings(mergedSettings);
           } catch (parseErr) {
             console.error('Failed to parse settings JSON:', parseErr);
             setError('Failed to parse settings. Using defaults.');
-            // Fall back to defaults
             setSettings(defaultSettings);
           }
         } else {
@@ -59,6 +144,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
 
     loadSettings();
+    loadProviders();
   }, []);
 
   const updateSettings = async (newSettings: Partial<Settings>) => {
@@ -97,7 +183,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, loading, error }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, loading, error, availableProviders, loadProviders }}>
       {children}
     </SettingsContext.Provider>
   );

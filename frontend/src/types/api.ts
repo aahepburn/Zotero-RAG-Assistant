@@ -24,8 +24,10 @@ export interface ChatResponse {
   summary: string;
   citations: Citation[];
   snippets: Snippet[];
+  generated_title?: string;
 }
 
 export interface ChatRequest {
   query: string;
+  session_id?: string;
 }
