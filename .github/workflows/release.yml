@@ -148,7 +148,7 @@ jobs:
             artifacts/windows-installers/*
             artifacts/linux-installers/*
           draft: false
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           fail_on_unmatched_files: false
         env:
