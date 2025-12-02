@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-12-02
+
+### Fixed
+
+- **Linux AppImage Python detection** - Fixed "Python Not Found" errors on Linux systems
+  - Now correctly detects `python3` command (standard on modern Linux distros)
+  - Tries bundled Python first, falls back to system Python gracefully
+  - Added multiple fallback paths: `python3`, `python`, `/usr/bin/python3`, etc.
+  - Shows platform-specific installation instructions if Python is missing
+- **Development mode backend conflict** - Fixed port 8000 conflict in dev mode
+  - Electron no longer tries to start its own backend in development
+  - Uses the backend started by `npm run dev:backend` instead
+- **Working directory resolution** - Fixed backend module import errors in dev mode
+  - Correctly resolves project root directory on all platforms
+  - Backend can now find Python modules in development and production
+
+### Added
+
+- Comprehensive Python detection system with smart fallback logic
+- Platform-specific error messages for missing Python installations
+- Detailed logging for Python detection and backend startup process
+- New documentation:
+  - `docs/PYTHON_DETECTION.md` - Technical architecture
+  - `docs/LINUX_PYTHON_GUIDE.md` - User guide for Linux
+  - `docs/BUILD_CHECKLIST.md` - Build and testing procedures
+  - `docs/PYTHON_DETECTION_FLOW.txt` - Visual flow diagram
+
 ## [0.1.0] - 2024-12-02
 
 ### Added - Desktop App Release 🎉

@@ -36,9 +36,9 @@ function generateAuthToken(): string {
 }
 
 /**
- * Check if Python 3 is available and has required packages
+ * Check if Python 3 is available
  */
-async function checkPythonAvailability(pythonCmd: string, requirementsPath?: string): Promise<{ available: boolean; version?: string; error?: string }> {
+async function checkPythonAvailability(pythonCmd: string): Promise<{ available: boolean; version?: string; error?: string }> {
   return new Promise((resolve) => {
     const proc = spawn(pythonCmd, ['--version']);
     let output = '';
@@ -72,34 +72,112 @@ async function checkPythonAvailability(pythonCmd: string, requirementsPath?: str
 }
 
 /**
+ * Find the best Python interpreter to use
+ * Returns the full path to a working Python 3 interpreter
+ */
+async function findPythonInterpreter(): Promise<{ path: string; version?: string; source: string } | null> {
+  const candidates: { path: string; source: string }[] = [];
+  
+  // In production, try bundled Python first
+  if (!IS_DEV) {
+    const resourcesPath = process.resourcesPath;
+    const bundledPythonPaths = [
+      // Standard locations for bundled Python
+      path.join(resourcesPath, 'python', 'bin', 'python3'),
+      path.join(resourcesPath, 'python', 'bin', 'python'),
+      // Windows
+      path.join(resourcesPath, 'python', 'Scripts', 'python.exe'),
+      path.join(resourcesPath, 'python', 'python.exe'),
+    ];
+    
+    for (const pythonPath of bundledPythonPaths) {
+      if (fs.existsSync(pythonPath)) {
+        candidates.push({ path: pythonPath, source: 'bundled' });
+      }
+    }
+  }
+  
+  // Add system Python candidates
+  // On Linux/macOS, prefer python3 over python
+  if (process.platform !== 'win32') {
+    candidates.push(
+      { path: 'python3', source: 'system' },
+      { path: 'python', source: 'system' },
+      { path: '/usr/bin/python3', source: 'system' },
+      { path: '/usr/local/bin/python3', source: 'system' }
+    );
+  } else {
+    candidates.push(
+      { path: 'python', source: 'system' },
+      { path: 'python3', source: 'system' }
+    );
+  }
+  
+  // Test each candidate
+  for (const candidate of candidates) {
+    console.log(`  Testing Python candidate: ${candidate.path} (${candidate.source})`);
+    const result = await checkPythonAvailability(candidate.path);
+    
+    if (result.available) {
+      console.log(`  ✓ Found working Python ${result.version} at ${candidate.path}`);
+      return {
+        path: candidate.path,
+        version: result.version,
+        source: candidate.source
+      };
+    } else {
+      console.log(`  ✗ ${candidate.path}: ${result.error}`);
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Get the path to the Python backend
  * In dev: use the source directory
- * In production: use the packaged binary in extraResources
+ * In production: use the packaged backend in extraResources
  */
-function getBackendPath(): { command: string; args: string[]; cwd: string } {
+async function getBackendPath(): Promise<{ command: string; args: string[]; cwd: string; pythonInfo?: { version?: string; source: string } } | null> {
   if (IS_DEV) {
     // Development: run uvicorn directly from source
-    const projectRoot = path.join(__dirname, '..');
+    // In dev, __dirname is typically dist/electron/, so go up two levels to project root
+    const projectRoot = path.resolve(__dirname, '..', '..');
+    
+    console.log('Finding Python interpreter for development...');
+    const pythonInfo = await findPythonInterpreter();
+    
+    if (!pythonInfo) {
+      console.error('✗ No Python 3 interpreter found');
+      return null;
+    }
+    
     return {
-      command: 'python3',
+      command: pythonInfo.path,
       args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
-      cwd: projectRoot
+      cwd: projectRoot,
+      pythonInfo
     };
   } else {
-    // Production: use bundled Python environment
+    // Production: use bundled Python environment or fall back to system
     const resourcesPath = process.resourcesPath;
     const backendPath = path.join(resourcesPath, 'backend');
-    const pythonPath = path.join(resourcesPath, 'python');
     
-    // Get bundled Python executable
-    const pythonExe = process.platform === 'win32'
-      ? path.join(pythonPath, 'Scripts', 'python.exe')
-      : path.join(pythonPath, 'bin', 'python');
+    console.log('Finding Python interpreter for production...');
+    const pythonInfo = await findPythonInterpreter();
+    
+    if (!pythonInfo) {
+      console.error('✗ No Python 3 interpreter found');
+      return null;
+    }
+    
+    console.log(`Using ${pythonInfo.source} Python: ${pythonInfo.path}`);
     
     return {
-      command: pythonExe,
+      command: pythonInfo.path,
       args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
-      cwd: resourcesPath
+      cwd: resourcesPath,
+      pythonInfo
     };
   }
 }
@@ -152,11 +230,46 @@ async function waitForBackend(maxRetries = 30, delayMs = 1000): Promise<boolean>
  * Spawn the Python backend process
  */
 async function startBackend(): Promise<boolean> {
-  const { command, args, cwd } = getBackendPath();
+  const backendConfig = await getBackendPath();
+  
+  if (!backendConfig) {
+    console.error('================================================================================');
+    console.error('✗ FATAL: Could not find Python interpreter');
+    console.error('================================================================================');
+    
+    const platform = process.platform;
+    let instructions = 'Please install Python 3.8 or later.';
+    
+    if (platform === 'linux') {
+      instructions = 'Please install Python 3:\n\n' +
+        'Ubuntu/Debian: sudo apt install python3\n' +
+        'Fedora/RHEL: sudo dnf install python3\n' +
+        'Arch: sudo pacman -S python';
+    } else if (platform === 'darwin') {
+      instructions = 'Please install Python 3:\n\n' +
+        'Using Homebrew: brew install python3\n' +
+        'Or download from: https://www.python.org/downloads/';
+    } else if (platform === 'win32') {
+      instructions = 'Please install Python 3 from:\nhttps://www.python.org/downloads/\n\n' +
+        'Make sure to check "Add Python to PATH" during installation.';
+    }
+    
+    dialog.showErrorBox(
+      'Python Not Found',
+      `The application requires Python 3 to run the backend service.\n\n${instructions}`
+    );
+    return false;
+  }
+  
+  const { command, args, cwd, pythonInfo } = backendConfig;
   
   console.log('================================================================================');
   console.log('Starting backend...');
-  console.log(`  Command: ${command}`);
+  console.log(`  Python: ${command}`);
+  if (pythonInfo) {
+    console.log(`  Version: ${pythonInfo.version || 'unknown'}`);
+    console.log(`  Source: ${pythonInfo.source}`);
+  }
   console.log(`  Args: ${args.join(' ')}`);
   console.log(`  Working directory: ${cwd}`);
   console.log('================================================================================');
@@ -167,7 +280,16 @@ async function startBackend(): Promise<boolean> {
     console.log('Backend Structure Validation:');
     console.log(`  - Resources path: ${process.resourcesPath}`);
     console.log(`  - Python command: ${command}`);
-    console.log(`  - Python exists: ${fs.existsSync(command)}`);
+    console.log(`  - Python source: ${pythonInfo?.source || 'unknown'}`);
+    
+    // Only check if Python exists if it's a full path (bundled or absolute system path)
+    const isPythonFullPath = path.isAbsolute(command) || command.includes(path.sep);
+    if (isPythonFullPath) {
+      console.log(`  - Python exists: ${fs.existsSync(command)}`);
+    } else {
+      console.log(`  - Python command (will use PATH): ${command}`);
+    }
+    
     console.log(`  - Backend directory: ${cwd}`);
     console.log(`  - Backend exists: ${fs.existsSync(cwd)}`);
     
@@ -193,16 +315,10 @@ async function startBackend(): Promise<boolean> {
       console.error(`  - Error listing directories: ${e}`);
     }
     
-    // Validate Python executable
-    if (!fs.existsSync(command)) {
-      console.error('✗ FATAL: Python executable not found');
-      console.error('================================================================================');
-      
-      dialog.showErrorBox(
-        'Backend Missing - Python Not Found',
-        `The Python interpreter is missing from the application bundle.\n\nExpected: ${command}\n\nSee console logs for directory structure details.`
-      );
-      return false;
+    // Validate Python executable (only if it's a full path)
+    if (isPythonFullPath && !fs.existsSync(command)) {
+      console.error('✗ WARNING: Bundled Python executable not found, using system Python');
+      console.error(`  Expected bundled Python at: ${command}`);
     }
     
     // Validate backend directory
@@ -645,21 +761,48 @@ app.on('ready', async () => {
   // Setup auto-updater
   setupAutoUpdater();
   
-  // Start backend
-  const backendStarted = await startBackend();
-  
-  if (!backendStarted) {
-    const response = await dialog.showMessageBox({
-      type: 'error',
-      title: 'Backend Failed to Start',
-      message: 'The backend service failed to start. The application may not work correctly.',
-      buttons: ['Exit', 'Continue Anyway'],
-      defaultId: 0
-    });
+  // In development, backend is started separately by npm run dev:backend
+  // Only start backend in production mode
+  if (!IS_DEV) {
+    const backendStarted = await startBackend();
     
-    if (response.response === 0) {
-      app.quit();
-      return;
+    if (!backendStarted) {
+      const response = await dialog.showMessageBox({
+        type: 'error',
+        title: 'Backend Failed to Start',
+        message: 'The backend service failed to start. The application may not work correctly.',
+        buttons: ['Exit', 'Continue Anyway'],
+        defaultId: 0
+      });
+      
+      if (response.response === 0) {
+        app.quit();
+        return;
+      }
+    }
+  } else {
+    console.log('Development mode: Skipping backend startup (handled by npm run dev:backend)');
+    console.log('Waiting for backend to be available...');
+    
+    // Wait for backend to be ready (started by separate process)
+    const backendReady = await waitForBackend(30, 1000);
+    
+    if (!backendReady) {
+      console.warn('⚠ Backend not detected - make sure "npm run dev:backend" is running');
+      const response = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Backend Not Detected',
+        message: 'Could not connect to backend at http://localhost:8000.\n\nMake sure you\'re running "npm run dev" which starts the backend automatically.',
+        buttons: ['Exit', 'Continue Anyway'],
+        defaultId: 1
+      });
+      
+      if (response.response === 0) {
+        app.quit();
+        return;
+      }
+    } else {
+      console.log('✓ Connected to development backend');
     }
   }
   

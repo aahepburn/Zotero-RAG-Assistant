@@ -26,6 +26,7 @@ Download the installer for your platform from the [Releases](https://github.com/
 - **macOS**: Download the `.dmg` file and drag the app to your Applications folder
 - **Windows**: Download and run the `.exe` installer
 - **Linux**: Download the `.AppImage` file, make it executable (`chmod +x`), and run
+  - **Note**: The AppImage includes Python, but if it fails to detect the bundled version, it will automatically use your system Python 3. Most modern Linux distros have Python 3 pre-installed. See [Linux Python Guide](docs/LINUX_PYTHON_GUIDE.md) if you encounter Python-related errors.
 
 The desktop app includes all dependencies and will automatically update when new versions are released.
 
@@ -124,6 +125,8 @@ See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for more details on the build pro
 ## Documentation
 
 - [Desktop App Development](docs/DESKTOP_APP.md)
+- [Python Detection & Bundling](docs/PYTHON_DETECTION.md) - Technical details on cross-platform Python handling
+- [Linux Python Guide](docs/LINUX_PYTHON_GUIDE.md) - User guide for Linux AppImage Python requirements
 - [API Endpoints](docs/api_endpoints.md)
 - [Profile System](docs/profile_system_guide.md)
 - [Multi-Provider Setup](docs/multi_provider_system.md)

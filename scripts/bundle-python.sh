@@ -86,6 +86,20 @@ echo "📊 Bundle size: $BUNDLE_SIZE"
 echo "📍 Location: $BUNDLE_DIR"
 echo ""
 
+# Create python3 symlink for Linux compatibility (if it doesn't exist)
+if [ "$PLATFORM" = "linux" ]; then
+    PYTHON_BIN_DIR="$BUNDLE_DIR/bin"
+    if [ ! -f "$PYTHON_BIN_DIR/python3" ] && [ -f "$PYTHON_BIN_DIR/python" ]; then
+        echo "🔗 Creating python3 symlink for Linux compatibility..."
+        ln -s python "$PYTHON_BIN_DIR/python3"
+    fi
+    # Also ensure python exists if only python3 exists
+    if [ ! -f "$PYTHON_BIN_DIR/python" ] && [ -f "$PYTHON_BIN_DIR/python3" ]; then
+        echo "🔗 Creating python symlink for compatibility..."
+        ln -s python3 "$PYTHON_BIN_DIR/python"
+    fi
+fi
+
 # Verify the bundle
 echo "🔍 Verifying installation..."
 if $PYTHON_BUNDLE_CMD -c "import fastapi, uvicorn, chromadb, sentence_transformers; print('✓ All critical imports successful')"; then
@@ -96,6 +110,8 @@ if $PYTHON_BUNDLE_CMD -c "import fastapi, uvicorn, chromadb, sentence_transforme
     echo "1. Build Electron app: npm run package:mac (or :win, :linux)"
     echo "2. The bundled Python will be included automatically"
     echo "3. App will run standalone without requiring system Python"
+    echo ""
+    echo "💡 Note: App will also fall back to system Python if bundle is not available"
 else
     echo "❌ Bundle verification failed!"
     exit 1
