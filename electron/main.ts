@@ -48,14 +48,17 @@ function getBackendPath(): { command: string; args: string[]; cwd: string } {
       cwd: projectRoot
     };
   } else {
-    // Production: run packaged backend binary
+    // Production: run Python backend from extraResources
     const resourcesPath = process.resourcesPath;
-    const backendBinary = path.join(resourcesPath, 'backend', 'backend');
+    const backendPath = path.join(resourcesPath, 'backend');
+    
+    // Check for python3 or python command
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
     
     return {
-      command: backendBinary,
-      args: ['--port', BACKEND_PORT.toString()],
-      cwd: path.join(resourcesPath, 'backend')
+      command: pythonCmd,
+      args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
+      cwd: path.dirname(backendPath)
     };
   }
 }
