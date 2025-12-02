@@ -231,6 +231,59 @@ def read_root_head():
     """Health check endpoint (HEAD) for Zotero LLM backend."""
     return {"msg": "Welcome to Zotero LLM Plugin backend"}
 
+@app.get("/health")
+def health_check():
+    """
+    Detailed health check endpoint that validates all critical components.
+    Returns structured health information for diagnostics.
+    """
+    try:
+        health_status = {
+            "status": "healthy",
+            "timestamp": __import__("datetime").datetime.now().isoformat(),
+            "components": {}
+        }
+        
+        # Check profile system
+        try:
+            active = profile_manager.get_active_profile()
+            health_status["components"]["profile_manager"] = {
+                "status": "ok",
+                "active_profile": active["id"] if active else None
+            }
+        except Exception as e:
+            health_status["components"]["profile_manager"] = {
+                "status": "error",
+                "error": str(e)
+            }
+            health_status["status"] = "degraded"
+        
+        # Check database path
+        try:
+            db_exists = os.path.exists(DB_PATH)
+            health_status["components"]["database"] = {
+                "status": "ok" if db_exists else "warning",
+                "path": DB_PATH,
+                "exists": db_exists
+            }
+            if not db_exists:
+                health_status["status"] = "degraded"
+        except Exception as e:
+            health_status["components"]["database"] = {
+                "status": "error",
+                "error": str(e)
+            }
+            health_status["status"] = "degraded"
+        
+        return health_status
+        
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": __import__("datetime").datetime.now().isoformat()
+        }
+
 @app.get("/pdfsample")
 def pdf_sample(
     filename: str = Query(..., description="Path to PDF file, e.g. backend/sample_pdfs/test_article.pdf"),

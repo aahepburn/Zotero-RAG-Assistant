@@ -50,8 +50,11 @@ Choose the installer for your platform:
 **macOS:**
 1. Download the `.dmg` file for your Mac (Intel or Apple Silicon)
 2. Open the DMG and drag the app to your Applications folder
-3. Launch "Zotero LLM Assistant" from Applications
-4. If you see a security warning, go to System Settings > Privacy & Security and click "Open Anyway"
+3. **IMPORTANT - Bypass Gatekeeper** (app is not code-signed):
+   - **Option A (Recommended)**: Right-click the app → "Open" → Click "Open" in the dialog
+   - **Option B**: Terminal command: `xattr -cr "/Applications/Zotero LLM Assistant.app"`
+   - **Option C**: System Settings → Privacy & Security → scroll down → click "Open Anyway"
+4. If you see "damaged and can't be opened", use Option A or B above (this is Gatekeeper, not actual damage)
 
 **Windows:**
 1. Download the `.exe` installer
@@ -109,11 +112,30 @@ After launching the app:
 - ✅ **PDF integration** - Open papers directly from citations
 - ✅ **Privacy-first** - Everything runs locally (except LLM API calls)
 
-## ⚠️ Known Issues
+## ⚠️ Known Issues & Troubleshooting
+
+### Security Warnings (Expected on First Install)
+
+**macOS: "damaged and can't be opened"**
+- This is macOS Gatekeeper blocking unsigned apps, not actual damage
+- **Fix**: Right-click the app → "Open" → Click "Open" in the confirmation dialog
+- **OR**: Run in Terminal: `xattr -cr "/Applications/Zotero LLM Assistant.app"`
+- Future releases will be code-signed to avoid this
+
+**Windows: SmartScreen warning**
+- Windows may show "Windows protected your PC" warning
+- **Fix**: Click "More info" → "Run anyway"
+- App is not yet code-signed but is safe to run
+
+**Linux: Permission denied**
+- AppImage files need execute permission
+- **Fix**: `chmod +x "Zotero LLM Assistant-0.1.0-linux-x86_64.AppImage"`
+
+### Other Known Issues
 
 - **Default icon**: Using placeholder Electron icon - custom icon coming in next release
-- **Windows SmartScreen**: May show warning on first install (app is not yet code-signed)
 - **Large libraries**: Initial indexing of 1000+ PDFs can take 30+ minutes
+- **Python required**: App requires Python 3.8+ installed on your system
 - **Beta software**: This is an early release - expect some rough edges
 
 ## 🆙 Upgrading from Web Version

@@ -1,7 +1,17 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+// In Electron production, we need to use the full backend URL
+// In development (Vite dev server), we can use relative paths with proxy
+const isElectron = navigator.userAgent.includes('Electron');
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || (isElectron ? "http://localhost:8000" : "");
+
+// Log API client configuration for debugging
+console.log('[API Client] Configuration:');
+console.log('  - Electron mode:', isElectron);
+console.log('  - BASE_URL:', BASE_URL);
+console.log('  - User agent:', navigator.userAgent);
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(path.startsWith("/") ? path : `/${path}`, {
+  const fullPath = BASE_URL + (path.startsWith("/") ? path : `/${path}`);
+  const res = await fetch(fullPath, {
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -24,4 +34,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-export { BASE_URL, request };
+/**
+ * Configured fetch function that automatically prepends BASE_URL
+ * Use this instead of direct fetch() calls to ensure proper URL resolution in Electron
+ */
+function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  const fullPath = BASE_URL + (path.startsWith("/") ? path : `/${path}`);
+  console.log(`[API Fetch] ${options?.method || 'GET'} ${fullPath}`);
+  return fetch(fullPath, options);
+}
+
+export { BASE_URL, request, apiFetch };

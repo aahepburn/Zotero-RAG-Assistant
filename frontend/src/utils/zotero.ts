@@ -2,6 +2,8 @@
  * Utility functions for interacting with Zotero via URI schemes
  */
 
+import { apiFetch } from '../api/client';
+
 /**
  * Build a zotero://select URI to open and select an item in Zotero
  * @param itemKey - The Zotero item key
@@ -85,7 +87,7 @@ export async function openLocalPdf(pdfPath: string): Promise<void> {
   }
   
   try {
-    const response = await fetch("/open_pdf", {
+    const response = await apiFetch("/open_pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pdf_path: pdfPath }),

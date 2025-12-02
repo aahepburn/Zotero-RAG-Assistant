@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useSessions } from "../../contexts/SessionsContext";
 import { useChatContext } from "../../contexts/ChatContext";
+import { apiFetch } from "../../api/client";
 
 function buildZoteroSelectUri(itemKey?: string | number | null, groupId?: string | number | null) {
   if (!itemKey) return null;
@@ -129,7 +130,7 @@ const SourcesPanel: React.FC = () => {
                       const fp = String(s.localPdfPath);
                       console.log("Opening PDF:", fp);
                       try {
-                        const resp = await fetch("/open_pdf", {
+                        const resp = await apiFetch("/open_pdf", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ pdf_path: fp }),
@@ -200,7 +201,7 @@ const SourcesPanel: React.FC = () => {
                             if (fp) {
                               console.log('Opening PDF:', fp);
                               try {
-                                const resp = await fetch('/open_pdf', {
+                                const resp = await apiFetch('/open_pdf', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({ pdf_path: fp }),

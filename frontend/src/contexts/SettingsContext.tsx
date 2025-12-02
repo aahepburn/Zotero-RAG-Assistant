@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiFetch } from '../api/client';
 
 export interface ProviderCredentials {
   api_key?: string;
@@ -95,7 +96,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Load available providers from backend
   const loadProviders = async () => {
     try {
-      const response = await fetch('/providers');
+      const response = await apiFetch('/providers');
       if (response.ok) {
         const data = await response.json();
         setAvailableProviders(data.providers || []);
@@ -109,7 +110,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await fetch('/settings');
+        const response = await apiFetch('/settings');
         if (response.ok) {
           const text = await response.text();
           try {
@@ -152,7 +153,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       setError(null);
       const updatedSettings = { ...settings, ...newSettings };
       
-      const response = await fetch('/settings', {
+      const response = await apiFetch('/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +168,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       const result = await response.json();
       
       // After saving, reload settings to get the masked versions
-      const reloadResponse = await fetch('/settings');
+      const reloadResponse = await apiFetch('/settings');
       if (reloadResponse.ok) {
         const data = await reloadResponse.json();
         setSettings(data);

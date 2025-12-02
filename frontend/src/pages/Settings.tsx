@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings, ModelInfo, ProviderInfo } from '../contexts/SettingsContext';
+import { apiFetch } from '../api/client';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import ProfileSelector from '../components/profile/ProfileSelector';
@@ -64,7 +65,7 @@ const Settings: React.FC = () => {
   const loadModelsForProvider = async (providerId: string) => {
     setLoadingModels(prev => ({ ...prev, [providerId]: true }));
     try {
-      const response = await fetch(`/providers/${providerId}/models`);
+      const response = await apiFetch(`/providers/${providerId}/models`);
       if (response.ok) {
         const data = await response.json();
         setAvailableModels(prev => ({ ...prev, [providerId]: data.models || [] }));
@@ -79,7 +80,7 @@ const Settings: React.FC = () => {
   const validateProvider = async (providerId: string) => {
     setValidatingProvider(providerId);
     try {
-      const response = await fetch(`/providers/${providerId}/validate`, {
+      const response = await apiFetch(`/providers/${providerId}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

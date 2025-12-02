@@ -4,6 +4,7 @@ vector_db/
 backend/__pycache__/
 node_modules/
 .env
+python-dist/
 backend/sample_pdfs/
 backend/.DS_Store
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions } from "../../contexts/SessionsContext";
 import { useChatContext } from "../../contexts/ChatContext";
+import { apiFetch } from "../../api/client";
 
 interface IndexProgress {
   processed_items?: number;
@@ -30,7 +31,7 @@ const OllamaStatus: React.FC = () => {
 
   const check = async () => {
     try {
-      const resp = await fetch("/ollama_status");
+      const resp = await apiFetch("/ollama_status");
       const data = await resp.json();
       setStatus(data.status);
       setModels(data.models || []);
@@ -115,7 +116,7 @@ const TopNav: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const resp = await fetch('/index_stats');
+        const resp = await apiFetch('/index_stats');
         const data = await resp.json();
         setIndexStats(data);
       } catch (err) {
@@ -133,7 +134,7 @@ const TopNav: React.FC = () => {
     try {
       setReindexing(true);
       setShowIndexMenu(false);
-      const resp = await fetch("/index_library", { 
+      const resp = await apiFetch("/index_library", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ incremental })
@@ -143,14 +144,14 @@ const TopNav: React.FC = () => {
       // Start polling status
       const poll = async () => {
         try {
-          const r = await fetch('/index_status');
+          const r = await apiFetch('/index_status');
           const js = await r.json();
           setIndexStatus(js);
           if (js?.status === 'indexing') {
             return false;
           }
           // Refresh stats after indexing completes
-          const statsResp = await fetch('/index_stats');
+          const statsResp = await apiFetch('/index_stats');
           const statsData = await statsResp.json();
           setIndexStats(statsData);
           return true;
