@@ -29,3 +29,27 @@ __pycache__/
 *.swp
 *.swo
 *~
+
+# Electron build output
+dist/
+release/
+electron/node_modules/
+
+# Build artifacts
+*.app
+*.dmg
+*.pkg
+*.deb
+*.AppImage
+*.exe
+*.msi
+*.rpm
+*.tar.gz
+*.icns
+*.ico
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

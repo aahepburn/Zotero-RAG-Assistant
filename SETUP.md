@@ -1,6 +1,68 @@
 # Setup Guide for New Machines
 
-## Quick Setup (5 minutes)
+## Option 1: Desktop App (Easiest) 🎉
+
+**For end users - no setup required!**
+
+1. Download the installer from [GitHub Releases](https://github.com/aahepburn/zotero-llm-plugin/releases)
+   - **macOS**: Download `.dmg`, drag to Applications
+   - **Windows**: Download `.exe`, run installer
+   - **Linux**: Download `.AppImage`, make executable and run
+
+2. Launch the app
+
+3. Configure your Zotero database path in Settings
+
+4. Add API keys for your preferred LLM provider
+
+5. Click "Index Library" and start chatting!
+
+**That's it!** The app bundles everything you need, including Python and all dependencies.
+
+---
+
+## Option 2: Development Setup (For Developers)
+
+### Desktop App Development
+
+**Quick Setup (5 minutes)**
+
+```bash
+# 1. Clone and navigate
+git clone https://github.com/aahepburn/zotero-llm-plugin.git
+cd zotero-llm-plugin
+
+# 2. Install dependencies
+npm install                    # Root (Electron) dependencies
+cd frontend && npm install && cd ..  # Frontend dependencies
+
+# 3. Setup Python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 4. Configure Zotero path (optional - can do via UI)
+cp .env.example .env
+# Edit .env and set: ZOTERO_DB_PATH=/path/to/Zotero/zotero.sqlite
+
+# 5. Run desktop app in development mode
+npm run dev
+
+# This starts:
+# - Frontend dev server (Vite)
+# - Backend API (FastAPI)
+# - Electron window
+```
+
+The desktop app window will open automatically with all services running!
+
+**See [Desktop App Development Guide](docs/DESKTOP_APP.md) for detailed instructions.**
+
+---
+
+### Web App Development
+
+**Quick Setup (5 minutes)**
 
 ```bash
 # 1. Clone and navigate

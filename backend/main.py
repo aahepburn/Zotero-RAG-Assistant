@@ -226,6 +226,11 @@ def read_root():
     """Health check endpoint for Zotero LLM backend."""
     return {"msg": "Welcome to Zotero LLM Plugin backend"}
 
+@app.head("/")
+def read_root_head():
+    """Health check endpoint (HEAD) for Zotero LLM backend."""
+    return {"msg": "Welcome to Zotero LLM Plugin backend"}
+
 @app.get("/pdfsample")
 def pdf_sample(
     filename: str = Query(..., description="Path to PDF file, e.g. backend/sample_pdfs/test_article.pdf"),

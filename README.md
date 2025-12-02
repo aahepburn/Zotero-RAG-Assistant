@@ -34,13 +34,33 @@ Researchers deserve to talk to their own libraries as easily as sending a messag
 
 ## Quick Start
 
-### Prerequisites
+### Desktop App (Recommended)
+
+Download the latest installer for your platform from [Releases](https://github.com/aahepburn/zotero-llm-plugin/releases):
+
+- **macOS**: Download `.dmg`, drag to Applications
+- **Windows**: Download `.exe`, run installer
+- **Linux**: Download `.AppImage`, make executable and run
+
+The desktop app includes everything you need - no Python or Node.js installation required!
+
+**Features:**
+- ✅ All-in-one installer with bundled backend
+- ✅ Automatic updates via GitHub Releases
+- ✅ Native desktop experience
+- ✅ Cross-platform (macOS, Windows, Linux)
+
+### Web App (Development)
+
+For developers or if you prefer to run from source:
+
+#### Prerequisites
 
 - Python 3.8+
 - Node.js 16+
 - Zotero desktop app with a local library
 
-### Installation
+#### Installation
 
 ```bash
 # Clone the repository
@@ -83,6 +103,20 @@ cp .env.example .env
 
 ### Running the Application
 
+#### Desktop App (Development)
+
+```bash
+# Run everything at once (frontend + backend + Electron)
+npm run dev
+
+# Or individually in separate terminals:
+npm run dev:frontend   # Terminal 1
+npm run dev:backend    # Terminal 2 (requires activated venv)
+npm run dev:electron   # Terminal 3
+```
+
+#### Web App
+
 ```bash
 # Terminal 1: Start backend
 source .venv/bin/activate
@@ -101,6 +135,31 @@ Open http://localhost:5173 in your browser.
 2. **Start chatting**: Ask questions about your research
 3. **View sources**: Check the Evidence Panel to see citations and snippets
 4. **Configure settings**: Adjust LLM provider, embedding model, and paths as needed
+
+---
+
+## Building Desktop Installers
+
+Want to package the app for distribution? See [Desktop App Development Guide](docs/DESKTOP_APP.md).
+
+```bash
+# Build for your platform
+npm run package:mac     # macOS: DMG + ZIP
+npm run package:win     # Windows: NSIS installer
+npm run package:linux   # Linux: AppImage + DEB
+
+# Build for all platforms
+npm run package:all
+
+# Installers will be in release/ directory
+```
+
+**Release Process:**
+1. Update version in `package.json`
+2. Build installers on each platform
+3. Tag release: `git tag v0.1.0 && git push origin v0.1.0`
+4. Create GitHub Release and upload all artifacts
+5. Users get automatic updates! 🎉
 
 ---
 

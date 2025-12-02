@@ -1,0 +1,117 @@
+/* UpdateBanner component styles */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.update-banner__content {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.update-banner__content--info {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.update-banner__content--progress {
+  background: #4299e1;
+  color: white;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.update-banner__content--success {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+}
+
+.update-banner__content--error {
+  background: linear-gradient(135deg, #eb3941 0%, #f15e64 100%);
+  color: white;
+}
+
+.update-banner__message {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.update-banner__message strong {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.update-banner__message span {
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.update-banner__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.update-banner__button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.update-banner__button--primary {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  backdrop-filter: blur(10px);
+}
+
+.update-banner__button--primary:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.update-banner__button--text {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.update-banner__button--text:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.update-banner__progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.update-banner__progress-bar {
+  height: 100%;
+  background: white;
+  transition: width 0.3s ease;
+  border-radius: 2px;
+}

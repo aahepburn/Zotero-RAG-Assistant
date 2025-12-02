@@ -1,0 +1,178 @@
+{
+  "name": "zotero-llm-plugin",
+  "productName": "Zotero LLM Assistant",
+  "version": "0.1.0",
+  "description": "AI-powered research assistant for your Zotero library",
+  "main": "dist/electron/main.js",
+  "author": {
+    "name": "aahepburn",
+    "email": "your-email@example.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aahepburn/zotero-llm-plugin.git"
+  },
+  "homepage": "https://github.com/aahepburn/zotero-llm-plugin",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "python3 -m uvicorn backend.main:app --reload --port 8000",
+    "dev:electron": "wait-on http://localhost:5173 http://localhost:8000 && electron .",
+    "dev:electron:only": "npm run build:electron && npm run dev:electron",
+    "dev": "npm run build:electron && concurrently -n frontend,backend,electron -c blue,green,magenta \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:electron\"",
+    "build:frontend": "cd frontend && npm run build",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build": "npm run build:frontend && npm run build:electron",
+    "package": "npm run build && electron-builder",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:win": "npm run build && electron-builder --win",
+    "package:linux": "npm run build && electron-builder --linux",
+    "package:all": "npm run build && electron-builder -mwl",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "electron-updater": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.0",
+    "electron": "^39.2.4",
+    "electron-builder": "^24.9.0",
+    "typescript": "^5.3.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.aahepburn.zotero-llm",
+    "productName": "Zotero LLM Assistant",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!__pycache__",
+          "!*.pyc",
+          "!tests"
+        ]
+      },
+      {
+        "from": "requirements.txt",
+        "to": "backend/requirements.txt"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "title": "${productName} ${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "publisherName": "aahepburn"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "${productName}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icons",
+      "category": "Office",
+      "synopsis": "AI-powered research assistant for Zotero",
+      "description": "Chat with your Zotero library using AI. Get cited answers, search semantically, and manage your research with intelligent assistance."
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "aahepburn",
+      "repo": "zotero-llm-plugin",
+      "releaseType": "release"
+    }
+  }
+}
