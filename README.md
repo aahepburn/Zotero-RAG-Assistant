@@ -17,6 +17,10 @@ The application runs entirely on your local machine. Your documents and queries 
 - **Profile support**: Maintain separate workspaces with different settings and chat histories
 - **Cross-platform**: Available for macOS, Windows, and Linux
 
+
+<img width="1440" height="900" alt="Screenshot 2025-11-30 at 11 23 10 PM" src="https://github.com/user-attachments/assets/af1b2a89-8c38-4e60-829e-8ca550b9bfd5" />
+
+
 ## Installation
 
 ### Option 1: Desktop App (Recommended)
