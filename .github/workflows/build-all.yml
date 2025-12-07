@@ -10,6 +10,9 @@ on:
     tags:
       - 'v*'  # Trigger on version tags
 
+permissions:
+  contents: write
+
 jobs:
   build-all:
     strategy:
@@ -36,9 +39,9 @@ jobs:
           npm install
           cd frontend && npm install
       
-      # Linux/macOS Python setup
-      - name: Create Python virtual environment (Unix)
-        if: runner.os != 'Windows'
+      # macOS Python setup (Linux doesn't need python-dist)
+      - name: Create Python virtual environment (macOS)
+        if: runner.os == 'macOS'
         run: |
           python3 -m venv python-dist
           python-dist/bin/pip install --upgrade pip
@@ -49,6 +52,13 @@ jobs:
           find python-dist -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
           find python-dist -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
       
+      # Linux: Verify Python is available (will be installed by app on first run)
+      - name: Verify Python available (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          python3 --version
+          echo "Python will be installed by the app on first run using system Python"
+      
       # Windows Python setup
       - name: Create Python virtual environment (Windows)
         if: runner.os == 'Windows'
@@ -57,8 +67,8 @@ jobs:
           python-dist\Scripts\pip install --upgrade pip
           python-dist\Scripts\pip install --no-cache-dir -r requirements.txt
       
-      - name: Verify Python environment (Unix)
-        if: runner.os != 'Windows'
+      - name: Verify Python environment (macOS)
+        if: runner.os == 'macOS'
         run: |
           python-dist/bin/python3 --version
           python-dist/bin/python3 -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
@@ -122,13 +132,3 @@ jobs:
             release/*.exe
             release/*.zip
           retention-days: 30
-      
-      # Create GitHub Release (only one job should do this)
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: release/*
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
