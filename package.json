@@ -28,6 +28,10 @@
     "package:win": "npm run build && electron-builder --win --publish never",
     "package:linux": "npm run build && electron-builder --linux --publish never",
     "package:all": "npm run build && electron-builder -mwl --publish never",
+    "publish": "npm run build && electron-builder --publish always",
+    "publish:mac": "npm run build && electron-builder --mac --publish always",
+    "publish:win": "npm run build && electron-builder --win --publish always",
+    "publish:linux": "npm run build && electron-builder --linux --publish always",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -46,6 +50,14 @@
     "appId": "com.aahepburn.zotero-rag",
     "productName": "Zotero RAG Assistant",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "aahepburn",
+        "repo": "Zotero-RAG-Assistant",
+        "releaseType": "release"
+      }
+    ],
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -99,20 +111,10 @@
       "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ],
       "title": "${productName} ${version}",
-      "writeUpdateInfo": false
+      "writeUpdateInfo": false,
+      "background": null,
+      "icon": null
     },
     "win": {
       "target": [
