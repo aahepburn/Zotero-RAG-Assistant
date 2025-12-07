@@ -5,6 +5,8 @@ import { apiFetch } from '../api/client';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import ProfileSelector from '../components/profile/ProfileSelector';
+import { useAppUpdater } from '../hooks/useAppUpdater';
+import { isElectron } from '../utils/electron';
 import '../styles/settings.css';
 
 const Settings: React.FC = () => {
@@ -18,6 +20,9 @@ const Settings: React.FC = () => {
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
   const [validatingProvider, setValidatingProvider] = useState<string | null>(null);
   const [providerValidation, setProviderValidation] = useState<Record<string, { valid: boolean; message?: string }>>({});
+  
+  // Auto-updater hook (only used in Electron)
+  const updater = useAppUpdater();
 
   useEffect(() => {
     setFormData(settings);
@@ -168,6 +173,126 @@ const Settings: React.FC = () => {
           </p>
           <ProfileSelector />
         </section>
+
+        {/* Updates Section - Only shown in Electron */}
+        {isElectron() && (
+          <section className="settings-section">
+            <h2 className="settings-section-title">Application Updates</h2>
+            <p className="settings-section-description">
+              Keep your application up to date with the latest features and improvements.
+            </p>
+            
+            <div className="update-status-card">
+              <div className="update-info">
+                <div className="update-version">
+                  <strong>Current Version:</strong> {updater.currentVersion || 'Loading...'}
+                </div>
+                
+                {updater.status === 'idle' && (
+                  <div className="update-message">
+                    Click "Check for Updates" to see if a new version is available.
+                  </div>
+                )}
+                
+                {updater.status === 'checking' && (
+                  <div className="update-message checking">
+                    <span className="spinner"></span>
+                    Checking for updates...
+                  </div>
+                )}
+                
+                {updater.status === 'not-available' && (
+                  <div className="update-message up-to-date">
+                    ✓ You're running the latest version
+                  </div>
+                )}
+                
+                {updater.status === 'available' && updater.updateInfo && (
+                  <div className="update-message available">
+                    <strong>Update Available:</strong> Version {updater.updateInfo.version}
+                    {updater.updateInfo.releaseNotes && (
+                      <div className="release-notes">
+                        <details>
+                          <summary>Release Notes</summary>
+                          <div className="release-notes-content">
+                            {updater.updateInfo.releaseNotes}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {updater.status === 'downloading' && updater.downloadProgress && (
+                  <div className="update-message downloading">
+                    <div className="download-progress">
+                      <div className="progress-text">
+                        Downloading update... {updater.downloadProgress.percent.toFixed(1)}%
+                      </div>
+                      <div className="progress-bar">
+                        <div 
+                          className="progress-fill" 
+                          style={{ width: `${updater.downloadProgress.percent}%` }}
+                        />
+                      </div>
+                      <div className="progress-details">
+                        {(updater.downloadProgress.transferred / 1024 / 1024).toFixed(1)} MB / 
+                        {(updater.downloadProgress.total / 1024 / 1024).toFixed(1)} MB
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {updater.status === 'downloaded' && updater.updateInfo && (
+                  <div className="update-message downloaded">
+                    <strong>✓ Update Ready to Install</strong>
+                    <p>Version {updater.updateInfo.version} has been downloaded and is ready to install.</p>
+                    <p className="install-note">
+                      The application will restart to complete the installation.
+                    </p>
+                  </div>
+                )}
+                
+                {updater.status === 'error' && updater.error && (
+                  <div className="update-message error">
+                    <strong>Error:</strong> {updater.error}
+                  </div>
+                )}
+              </div>
+              
+              <div className="update-actions">
+                {(updater.status === 'idle' || updater.status === 'not-available' || updater.status === 'error') && (
+                  <Button
+                    onClick={updater.checkForUpdates}
+                    disabled={updater.status === 'checking'}
+                    variant="secondary"
+                  >
+                    Check for Updates
+                  </Button>
+                )}
+                
+                {updater.status === 'available' && (
+                  <Button
+                    onClick={updater.downloadUpdate}
+                    disabled={updater.status === 'downloading'}
+                    variant="primary"
+                  >
+                    Download Update
+                  </Button>
+                )}
+                
+                {updater.status === 'downloaded' && (
+                  <Button
+                    onClick={updater.installUpdate}
+                    variant="primary"
+                  >
+                    Install and Restart
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="settings-section">
           <h2 className="settings-section-title">Active Model</h2>

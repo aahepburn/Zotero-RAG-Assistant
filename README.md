@@ -15,6 +15,7 @@ The application runs entirely on your local machine. Your documents and queries 
 - **Source transparency**: View the exact text passages used to generate each answer
 - **Multiple LLM providers**: Use local models via Ollama, or connect to OpenAI, Anthropic, Google, or other providers
 - **Profile support**: Maintain separate workspaces with different settings and chat histories
+- **Automatic updates**: Stay up to date with the latest features and improvements
 - **Cross-platform**: Available for macOS, Windows, and Linux
 
 
@@ -32,7 +33,7 @@ Download the installer for your platform from the [Releases](https://github.com/
 - **Linux**: Download the `.AppImage` file, make it executable (`chmod +x`), and run
   - **Note**: The AppImage includes Python, but if it fails to detect the bundled version, it will automatically use your system Python 3. Most modern Linux distros have Python 3 pre-installed. See [Linux Python Guide](docs/LINUX_PYTHON_GUIDE.md) if you encounter Python-related errors.
 
-The desktop app includes all dependencies and will automatically update when new versions are released.
+The desktop app includes all dependencies and will automatically check for updates. You can install new versions directly from the Settings page.
 
 ### Option 2: Run from Source
 
@@ -129,6 +130,8 @@ See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for more details on the build pro
 ## Documentation
 
 - [Desktop App Development](docs/DESKTOP_APP.md)
+- [Auto-Updates System](docs/AUTO_UPDATES.md) - Complete guide to the automatic update system
+- [Auto-Updates Quick Start](docs/AUTO_UPDATES_QUICKSTART.md) - Quick reference for users and developers
 - [Python Detection & Bundling](docs/PYTHON_DETECTION.md) - Technical details on cross-platform Python handling
 - [Linux Python Guide](docs/LINUX_PYTHON_GUIDE.md) - User guide for Linux AppImage Python requirements
 - [API Endpoints](docs/api_endpoints.md)

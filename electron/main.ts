@@ -27,6 +27,8 @@ const FRONTEND_DEV_URL = 'http://localhost:5173';
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 let authToken: string | null = null;
+let updateDownloaded = false;
+let updateInfo: { version: string; releaseNotes?: string } | null = null;
 
 /**
  * Generate a random authentication token for backend communication
@@ -703,85 +705,188 @@ function setupIpcHandlers(): void {
  */
 function setupAutoUpdater(): void {
   // Configure auto-updater
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false; // Don't auto-download, let user decide
+  autoUpdater.autoInstallOnAppQuit = true; // Install on quit after download
   
-  // Check for updates on startup (after a delay)
+  // Disable update checks in development
+  if (IS_DEV) {
+    console.log('Auto-updater disabled in development mode');
+    return;
+  }
+  
+  // Check for updates on startup (after a delay to let app fully load)
   setTimeout(() => {
-    if (!IS_DEV) {
-      console.log('Checking for updates...');
-      autoUpdater.checkForUpdates();
-    }
+    console.log('Checking for updates on startup...');
+    autoUpdater.checkForUpdates().catch(err => {
+      console.error('Failed to check for updates on startup:', err);
+    });
   }, 10000); // Wait 10 seconds after startup
   
   // Check for updates periodically (every 4 hours)
   setInterval(() => {
-    if (!IS_DEV) {
-      autoUpdater.checkForUpdates();
-    }
+    console.log('Periodic update check...');
+    autoUpdater.checkForUpdates().catch(err => {
+      console.error('Failed to check for updates periodically:', err);
+    });
   }, 4 * 60 * 60 * 1000);
   
   // Update event handlers
   autoUpdater.on('checking-for-update', () => {
     console.log('Checking for updates...');
+    updateDownloaded = false;
+    updateInfo = null;
+    
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-checking');
+    }
   });
   
   autoUpdater.on('update-available', (info) => {
     console.log('Update available:', info.version);
+    updateInfo = {
+      version: info.version,
+      releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined
+    };
     
     // Notify renderer
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-available', {
-        version: info.version,
-        releaseNotes: info.releaseNotes
+      mainWindow.webContents.send('update-available', updateInfo);
+    }
+  });
+  
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('No updates available. Current version:', info.version);
+    
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-not-available', {
+        version: info.version
       });
     }
   });
   
-  autoUpdater.on('update-not-available', () => {
-    console.log('No updates available');
-  });
-  
   autoUpdater.on('error', (error) => {
     console.error('Auto-updater error:', error);
+    
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
   });
   
   autoUpdater.on('download-progress', (progress) => {
-    console.log(`Download progress: ${progress.percent.toFixed(2)}%`);
+    const percent = progress.percent.toFixed(2);
+    console.log(`Download progress: ${percent}% (${progress.transferred}/${progress.total} bytes)`);
     
     // Notify renderer of download progress
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update-download-progress', {
         percent: progress.percent,
         transferred: progress.transferred,
-        total: progress.total
+        total: progress.total,
+        bytesPerSecond: progress.bytesPerSecond
       });
     }
   });
   
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('Update downloaded:', info.version);
+    console.log('Update downloaded and ready to install:', info.version);
+    updateDownloaded = true;
+    updateInfo = {
+      version: info.version,
+      releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined
+    };
     
-    // Notify renderer that update is ready
+    // Notify renderer that update is ready to install
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-downloaded', {
-        version: info.version
-      });
+      mainWindow.webContents.send('update-downloaded', updateInfo);
     }
   });
   
   // IPC handlers for update actions
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      if (IS_DEV) {
+        return {
+          success: false,
+          error: 'Updates are not available in development mode'
+        };
+      }
+      
+      const result = await autoUpdater.checkForUpdates();
+      return {
+        success: true,
+        updateInfo: result?.updateInfo ? {
+          version: result.updateInfo.version,
+          releaseDate: result.updateInfo.releaseDate
+        } : null
+      };
+    } catch (error) {
+      console.error('Check for updates error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+  
   ipcMain.handle('download-update', async () => {
     try {
+      if (IS_DEV) {
+        return {
+          success: false,
+          error: 'Updates are not available in development mode'
+        };
+      }
+      
+      if (!updateInfo) {
+        return {
+          success: false,
+          error: 'No update available to download'
+        };
+      }
+      
       await autoUpdater.downloadUpdate();
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+      console.error('Download update error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   });
   
   ipcMain.handle('install-update', () => {
-    autoUpdater.quitAndInstall(false, true);
+    if (IS_DEV) {
+      return {
+        success: false,
+        error: 'Updates are not available in development mode'
+      };
+    }
+    
+    if (!updateDownloaded) {
+      return {
+        success: false,
+        error: 'No update has been downloaded yet'
+      };
+    }
+    
+    // This will quit the app and install the update
+    setImmediate(() => {
+      autoUpdater.quitAndInstall(false, true);
+    });
+    
+    return { success: true };
+  });
+  
+  ipcMain.handle('get-update-status', () => {
+    return {
+      updateAvailable: updateInfo !== null,
+      updateDownloaded: updateDownloaded,
+      updateInfo: updateInfo,
+      currentVersion: app.getVersion()
+    };
   });
 }
 

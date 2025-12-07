@@ -326,3 +326,190 @@
   color: var(--text-muted);
   font-weight: 400;
 }
+
+/* Update Status Card Styles */
+.update-status-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.update-info {
+  margin-bottom: 20px;
+}
+
+.update-version {
+  font-size: 15px;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.update-version strong {
+  color: var(--text-main);
+}
+
+.update-message {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.update-message.checking {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-message.up-to-date {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.update-message.available {
+  background: rgba(249, 115, 22, 0.1);
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.update-message.available strong {
+  color: #f97316;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.update-message.downloading {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.update-message.downloaded {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.update-message.downloaded strong {
+  color: #22c55e;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.update-message.downloaded p {
+  margin: 4px 0;
+  color: var(--text-main);
+}
+
+.update-message.downloaded .install-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.update-message.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.update-message.error strong {
+  color: #ef4444;
+}
+
+/* Spinner Animation */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Release Notes */
+.release-notes {
+  margin-top: 12px;
+}
+
+.release-notes details {
+  cursor: pointer;
+}
+
+.release-notes summary {
+  font-size: 13px;
+  color: var(--accent);
+  padding: 4px 0;
+  user-select: none;
+}
+
+.release-notes summary:hover {
+  text-decoration: underline;
+}
+
+.release-notes-content {
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Download Progress */
+.download-progress {
+  width: 100%;
+}
+
+.progress-text {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(59, 130, 246, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.progress-details {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Update Actions */
+.update-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}

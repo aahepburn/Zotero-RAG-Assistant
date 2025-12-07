@@ -6,6 +6,25 @@
  */
 
 // Type definitions for Electron API exposed via preload
+export interface UpdateInfo {
+  version: string;
+  releaseNotes?: string;
+}
+
+export interface DownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond?: number;
+}
+
+export interface UpdateStatus {
+  updateAvailable: boolean;
+  updateDownloaded: boolean;
+  updateInfo: UpdateInfo | null;
+  currentVersion: string;
+}
+
 export interface ElectronAPI {
   // Backend configuration
   getBackendConfig: () => Promise<{ backendUrl: string; authToken: string | null }>;
@@ -18,13 +37,18 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   
   // Auto-updater events
-  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => void;
-  onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void) => void;
-  onUpdateDownloaded: (callback: (info: { version: string }) => void) => void;
+  onUpdateChecking: (callback: () => void) => void;
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => void;
+  onUpdateNotAvailable: (callback: (info: { version: string }) => void) => void;
+  onUpdateDownloadProgress: (callback: (progress: DownloadProgress) => void) => void;
+  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => void;
+  onUpdateError: (callback: (error: { message: string }) => void) => void;
   
   // Auto-updater actions
+  checkForUpdates: () => Promise<{ success: boolean; updateInfo?: any; error?: string }>;
   downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
-  installUpdate: () => void;
+  installUpdate: () => Promise<{ success: boolean; error?: string }>;
+  getUpdateStatus: () => Promise<UpdateStatus>;
 }
 
 /**
