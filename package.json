@@ -1,7 +1,7 @@
 {
   "name": "zotero-llm-plugin",
   "productName": "Zotero LLM Assistant",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {

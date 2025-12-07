@@ -4,8 +4,7 @@ import os
 import threading
 from contextlib import contextmanager
 from backend.zoteroitem import ZoteroItem
-
-username = 'aahepburn'
+from pathlib import Path
 
 class ZoteroLibrary:
     def __init__(self, db_path):
@@ -140,7 +139,10 @@ class ZoteroLibrary:
         with self._cursor() as cur:
             cur.execute(query, tuple(params))
             results = cur.fetchall()
-        storage_dir = f'/Users/{username}/Zotero/storage/'
+        # Use cross-platform path relative to Zotero database location
+        # The storage directory is typically at the same level as the database
+        db_parent = Path(self.db_path).parent
+        storage_dir = str(db_parent / "storage")
         zotero_items = []
 
         for item in results:

@@ -49,8 +49,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "/Users/aahepburn/Zotero/zotero.sqlite"
-CHROMA_PATH = "/Users/aahepburn/.zotero-llm/chroma/user-1"
+# Default paths - use user's home directory for cross-platform compatibility
+_home = Path.home()
+DB_PATH = str(_home / "Zotero" / "zotero.sqlite")
+CHROMA_PATH = str(_home / ".zotero-llm" / "chroma" / "user-1")
 
 
 def load_settings(profile_id: str = None):

@@ -1,0 +1,76 @@
+name: Build Linux Release
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Node dependencies
+        run: |
+          npm install
+          cd frontend && npm install
+      
+      - name: Create Linux Python virtual environment
+        run: |
+          python3 -m venv python-dist
+          python-dist/bin/pip install --upgrade pip
+          python-dist/bin/pip install --no-cache-dir -r requirements.txt
+          # Clean up to reduce size
+          find python-dist -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find python-dist -type f -name "*.pyc" -delete
+          find python-dist -type f -name "*.pyo" -delete
+          find python-dist -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find python-dist -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
+      
+      - name: Verify Python environment
+        run: |
+          python-dist/bin/python3 --version
+          python-dist/bin/python3 -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Package Linux app
+        run: npm run package:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.tar.gz
+          retention-days: 30
+      
+      - name: Create GitHub Release (if tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/*.AppImage
+            release/*.deb
+            release/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

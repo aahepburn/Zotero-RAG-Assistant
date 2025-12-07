@@ -1,0 +1,134 @@
+name: Build All Platforms
+
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      version:
+        description: 'Version number (e.g., 0.1.4)'
+        required: true
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags
+
+jobs:
+  build-all:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Node dependencies
+        run: |
+          npm install
+          cd frontend && npm install
+      
+      # Linux/macOS Python setup
+      - name: Create Python virtual environment (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          python3 -m venv python-dist
+          python-dist/bin/pip install --upgrade pip
+          python-dist/bin/pip install --no-cache-dir -r requirements.txt
+          find python-dist -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find python-dist -type f -name "*.pyc" -delete || true
+          find python-dist -type f -name "*.pyo" -delete || true
+          find python-dist -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find python-dist -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
+      
+      # Windows Python setup
+      - name: Create Python virtual environment (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python -m venv python-dist
+          python-dist\Scripts\pip install --upgrade pip
+          python-dist\Scripts\pip install --no-cache-dir -r requirements.txt
+      
+      - name: Verify Python environment (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          python-dist/bin/python3 --version
+          python-dist/bin/python3 -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+      
+      - name: Verify Python environment (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python-dist\Scripts\python --version
+          python-dist\Scripts\python -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+      
+      - name: Build application
+        run: npm run build
+      
+      # Platform-specific packaging
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        run: npm run package:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: npm run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        run: npm run package:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Upload artifacts
+      - name: Upload Linux artifacts
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.tar.gz
+          retention-days: 30
+      
+      - name: Upload macOS artifacts
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          path: |
+            release/*.dmg
+            release/*.zip
+          retention-days: 30
+      
+      - name: Upload Windows artifacts
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            release/*.exe
+            release/*.zip
+          retention-days: 30
+      
+      # Create GitHub Release (only one job should do this)
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

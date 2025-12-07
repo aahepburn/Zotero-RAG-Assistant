@@ -1,0 +1,68 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Node dependencies
+        run: |
+          npm install
+          cd frontend && npm install
+      
+      - name: Create Windows Python virtual environment
+        run: |
+          python -m venv python-dist
+          python-dist\Scripts\pip install --upgrade pip
+          python-dist\Scripts\pip install --no-cache-dir -r requirements.txt
+      
+      - name: Verify Python environment
+        run: |
+          python-dist\Scripts\python --version
+          python-dist\Scripts\python -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Package Windows app
+        run: npm run package:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            release/*.exe
+            release/*.zip
+          retention-days: 30
+      
+      - name: Create GitHub Release (if tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/*.exe
+            release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

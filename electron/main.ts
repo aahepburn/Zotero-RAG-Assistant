@@ -72,30 +72,51 @@ async function checkPythonAvailability(pythonCmd: string): Promise<{ available: 
 }
 
 /**
- * Find the best Python interpreter to use
- * Returns the full path to a working Python 3 interpreter
+ * Find the bundled Python interpreter (production only)
+ * Returns the full path to the bundled Python 3 interpreter
  */
-async function findPythonInterpreter(): Promise<{ path: string; version?: string; source: string } | null> {
-  const candidates: { path: string; source: string }[] = [];
+async function findBundledPython(): Promise<{ path: string; version?: string; source: string } | null> {
+  const resourcesPath = process.resourcesPath;
+  const bundledPythonPaths = [
+    // Linux/macOS - Standard locations for bundled Python
+    path.join(resourcesPath, 'python', 'bin', 'python3'),
+    path.join(resourcesPath, 'python', 'bin', 'python'),
+    // Windows
+    path.join(resourcesPath, 'python', 'Scripts', 'python.exe'),
+    path.join(resourcesPath, 'python', 'python.exe'),
+  ];
   
-  // In production, try bundled Python first
-  if (!IS_DEV) {
-    const resourcesPath = process.resourcesPath;
-    const bundledPythonPaths = [
-      // Standard locations for bundled Python
-      path.join(resourcesPath, 'python', 'bin', 'python3'),
-      path.join(resourcesPath, 'python', 'bin', 'python'),
-      // Windows
-      path.join(resourcesPath, 'python', 'Scripts', 'python.exe'),
-      path.join(resourcesPath, 'python', 'python.exe'),
-    ];
-    
-    for (const pythonPath of bundledPythonPaths) {
-      if (fs.existsSync(pythonPath)) {
-        candidates.push({ path: pythonPath, source: 'bundled' });
+  console.log('Looking for bundled Python interpreter...');
+  for (const pythonPath of bundledPythonPaths) {
+    console.log(`  Checking: ${pythonPath}`);
+    if (fs.existsSync(pythonPath)) {
+      console.log(`  ✓ Found bundled Python at ${pythonPath}`);
+      // Verify it's a working Python 3 interpreter
+      const result = await checkPythonAvailability(pythonPath);
+      if (result.available) {
+        console.log(`  ✓ Verified Python ${result.version}`);
+        return {
+          path: pythonPath,
+          version: result.version,
+          source: 'bundled'
+        };
+      } else {
+        console.warn(`  ✗ Found file but not a working Python: ${result.error}`);
       }
+    } else {
+      console.log(`  ✗ Not found`);
     }
   }
+  
+  return null;
+}
+
+/**
+ * Find the best Python interpreter to use (development only)
+ * Returns the full path to a working Python 3 interpreter
+ */
+async function findSystemPython(): Promise<{ path: string; version?: string; source: string } | null> {
+  const candidates: { path: string; source: string }[] = [];
   
   // Add system Python candidates
   // On Linux/macOS, prefer python3 over python
@@ -114,8 +135,9 @@ async function findPythonInterpreter(): Promise<{ path: string; version?: string
   }
   
   // Test each candidate
+  console.log('Looking for system Python interpreter...');
   for (const candidate of candidates) {
-    console.log(`  Testing Python candidate: ${candidate.path} (${candidate.source})`);
+    console.log(`  Testing: ${candidate.path}`);
     const result = await checkPythonAvailability(candidate.path);
     
     if (result.available) {
@@ -135,22 +157,25 @@ async function findPythonInterpreter(): Promise<{ path: string; version?: string
 
 /**
  * Get the path to the Python backend
- * In dev: use the source directory
- * In production: use the packaged backend in extraResources
+ * In dev: use the source directory with system Python
+ * In production: use the packaged backend with bundled Python (NO FALLBACK)
  */
 async function getBackendPath(): Promise<{ command: string; args: string[]; cwd: string; pythonInfo?: { version?: string; source: string } } | null> {
   if (IS_DEV) {
-    // Development: run uvicorn directly from source
+    // Development: run uvicorn directly from source using system Python
     // In dev, __dirname is typically dist/electron/, so go up two levels to project root
     const projectRoot = path.resolve(__dirname, '..', '..');
     
-    console.log('Finding Python interpreter for development...');
-    const pythonInfo = await findPythonInterpreter();
+    console.log('Development mode: finding Python interpreter...');
+    const pythonInfo = await findSystemPython();
     
     if (!pythonInfo) {
-      console.error('✗ No Python 3 interpreter found');
+      console.error('✗ No Python 3 interpreter found on system');
+      console.error('Please install Python 3.8+ for development');
       return null;
     }
+    
+    console.log(`Using system Python: ${pythonInfo.path} (${pythonInfo.version || 'unknown version'})`);
     
     return {
       command: pythonInfo.path,
@@ -159,19 +184,32 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
       pythonInfo
     };
   } else {
-    // Production: use bundled Python environment or fall back to system
+    // Production: ONLY use bundled Python - no fallback to system
     const resourcesPath = process.resourcesPath;
-    const backendPath = path.join(resourcesPath, 'backend');
     
-    console.log('Finding Python interpreter for production...');
-    const pythonInfo = await findPythonInterpreter();
+    console.log('Production mode: looking for bundled Python interpreter...');
+    const pythonInfo = await findBundledPython();
     
     if (!pythonInfo) {
-      console.error('✗ No Python 3 interpreter found');
+      console.error('================================================================================');
+      console.error('✗ FATAL: Bundled Python interpreter not found');
+      console.error('================================================================================');
+      console.error(`  Resources path: ${resourcesPath}`);
+      console.error(`  Expected Python locations:`);
+      console.error(`    - ${path.join(resourcesPath, 'python', 'bin', 'python3')}`);
+      console.error(`    - ${path.join(resourcesPath, 'python', 'bin', 'python')}`);
+      if (process.platform === 'win32') {
+        console.error(`    - ${path.join(resourcesPath, 'python', 'Scripts', 'python.exe')}`);
+        console.error(`    - ${path.join(resourcesPath, 'python', 'python.exe')}`);
+      }
+      console.error('');
+      console.error('  This is a packaging error. The application should be self-contained.');
+      console.error('  Please contact support or reinstall the application.');
+      console.error('================================================================================');
       return null;
     }
     
-    console.log(`Using ${pythonInfo.source} Python: ${pythonInfo.path}`);
+    console.log(`Using bundled Python: ${pythonInfo.path} (${pythonInfo.version || 'unknown version'})`);
     
     return {
       command: pythonInfo.path,
@@ -237,27 +275,42 @@ async function startBackend(): Promise<boolean> {
     console.error('✗ FATAL: Could not find Python interpreter');
     console.error('================================================================================');
     
-    const platform = process.platform;
-    let instructions = 'Please install Python 3.8 or later.';
-    
-    if (platform === 'linux') {
-      instructions = 'Please install Python 3:\n\n' +
-        'Ubuntu/Debian: sudo apt install python3\n' +
-        'Fedora/RHEL: sudo dnf install python3\n' +
-        'Arch: sudo pacman -S python';
-    } else if (platform === 'darwin') {
-      instructions = 'Please install Python 3:\n\n' +
-        'Using Homebrew: brew install python3\n' +
-        'Or download from: https://www.python.org/downloads/';
-    } else if (platform === 'win32') {
-      instructions = 'Please install Python 3 from:\nhttps://www.python.org/downloads/\n\n' +
-        'Make sure to check "Add Python to PATH" during installation.';
+    if (IS_DEV) {
+      // Development mode: guide user to install Python
+      const platform = process.platform;
+      let instructions = 'Please install Python 3.8 or later.';
+      
+      if (platform === 'linux') {
+        instructions = 'Please install Python 3:\n\n' +
+          'Ubuntu/Debian: sudo apt install python3\n' +
+          'Fedora/RHEL: sudo dnf install python3\n' +
+          'Arch: sudo pacman -S python';
+      } else if (platform === 'darwin') {
+        instructions = 'Please install Python 3:\n\n' +
+          'Using Homebrew: brew install python3\n' +
+          'Or download from: https://www.python.org/downloads/';
+      } else if (platform === 'win32') {
+        instructions = 'Please install Python 3 from:\nhttps://www.python.org/downloads/\n\n' +
+          'Make sure to check "Add Python to PATH" during installation.';
+      }
+      
+      dialog.showErrorBox(
+        'Python Not Found',
+        `The application requires Python 3 to run the backend service.\n\n${instructions}`
+      );
+    } else {
+      // Production mode: this is a packaging error
+      dialog.showErrorBox(
+        'Application Installation Error',
+        `The bundled Python interpreter is missing from this installation.\n\n` +
+        `This is a packaging error. The application should be self-contained and not require Python to be installed on your system.\n\n` +
+        `Please try:\n` +
+        `1. Reinstalling the application\n` +
+        `2. Downloading a fresh copy from the official source\n` +
+        `3. Contacting support if the problem persists\n\n` +
+        `Expected Python location:\n${path.join(process.resourcesPath, 'python', 'bin', 'python3')}`
+      );
     }
-    
-    dialog.showErrorBox(
-      'Python Not Found',
-      `The application requires Python 3 to run the backend service.\n\n${instructions}`
-    );
     return false;
   }
   
