@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*'  # Trigger on version tags
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
