@@ -79,14 +79,20 @@
         ]
       },
       {
-        "from": "python-dist",
-        "to": "python",
-        "filter": [
-          "**/*"
-        ]
+        "from": "requirements.txt",
+        "to": "requirements.txt"
       }
     ],
     "mac": {
+      "extraResources": [
+        {
+          "from": "python-dist",
+          "to": "python",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ],
       "category": "public.app-category.productivity",
       "target": [
         {
@@ -117,6 +123,15 @@
       "icon": null
     },
     "win": {
+      "extraResources": [
+        {
+          "from": "python-dist",
+          "to": "python",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ],
       "target": [
         {
           "target": "nsis",

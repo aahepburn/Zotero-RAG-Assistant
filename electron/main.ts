@@ -158,9 +158,138 @@ async function findSystemPython(): Promise<{ path: string; version?: string; sou
 }
 
 /**
+ * Setup Linux virtual environment on first run
+ * Creates venv in ~/.config/zotero-rag-assistant/venv and installs dependencies
+ */
+async function setupLinuxVenv(onProgress?: (message: string, progress?: number) => void): Promise<{ pythonPath: string; venvPath: string } | null> {
+  const os = require('os');
+  const configDir = path.join(os.homedir(), '.config', 'zotero-rag-assistant');
+  const venvPath = path.join(configDir, 'venv');
+  const pythonBin = path.join(venvPath, 'bin', 'python3');
+  
+  // Check if venv already exists and is valid
+  if (fs.existsSync(pythonBin)) {
+    console.log(`✓ Linux venv already exists at: ${venvPath}`);
+    return { pythonPath: pythonBin, venvPath };
+  }
+  
+  console.log('================================================================================');
+  console.log('Linux: First run setup - creating virtual environment');
+  console.log('================================================================================');
+  
+  // Find system Python
+  const systemPython = await findSystemPython();
+  if (!systemPython) {
+    console.error('✗ System Python 3.8+ not found');
+    console.error('Please install: sudo apt install python3 python3-pip python3-venv');
+    if (mainWindow) {
+      dialog.showErrorBox(
+        'Python Required',
+        'Python 3.8 or later is required.\n\nPlease install:\nsudo apt install python3 python3-pip python3-venv\n\nThen restart the application.'
+      );
+    }
+    return null;
+  }
+  
+  try {
+    // Create config directory
+    onProgress?.('Creating configuration directory...', 10);
+    fs.mkdirSync(configDir, { recursive: true });
+    console.log(`✓ Created config directory: ${configDir}`);
+    
+    // Create virtual environment
+    onProgress?.('Creating Python virtual environment...', 20);
+    console.log(`Creating venv with ${systemPython.path}...`);
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(systemPython.path, ['-m', 'venv', venvPath]);
+      let stderr = '';
+      
+      proc.stderr?.on('data', (data) => { stderr += data.toString(); });
+      
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`venv creation failed: ${stderr}`));
+      });
+      
+      proc.on('error', reject);
+    });
+    console.log('✓ Virtual environment created');
+    
+    // Upgrade pip
+    onProgress?.('Upgrading pip...', 40);
+    console.log('Upgrading pip...');
+    await new Promise<void>((resolve, reject) => {
+      const pipBin = path.join(venvPath, 'bin', 'pip');
+      const proc = spawn(pipBin, ['install', '--upgrade', 'pip']);
+      
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error('pip upgrade failed'));
+      });
+      
+      proc.on('error', reject);
+    });
+    console.log('✓ pip upgraded');
+    
+    // Install dependencies
+    onProgress?.('Installing Python dependencies (this may take 2-5 minutes)...', 50);
+    console.log('Installing dependencies from requirements.txt...');
+    const requirementsPath = path.join(process.resourcesPath, 'requirements.txt');
+    
+    if (!fs.existsSync(requirementsPath)) {
+      throw new Error(`requirements.txt not found at: ${requirementsPath}`);
+    }
+    
+    await new Promise<void>((resolve, reject) => {
+      const pipBin = path.join(venvPath, 'bin', 'pip');
+      const proc = spawn(pipBin, ['install', '--no-cache-dir', '-r', requirementsPath]);
+      let lastOutput = '';
+      
+      proc.stdout?.on('data', (data) => {
+        lastOutput = data.toString();
+        console.log(lastOutput);
+        
+        // Parse progress from pip output
+        const match = lastOutput.match(/Downloading.*\((\d+)\/(\d+)\)/);
+        if (match) {
+          const current = parseInt(match[1]);
+          const total = parseInt(match[2]);
+          const progress = 50 + Math.floor((current / total) * 40);
+          onProgress?.(`Installing dependencies (${current}/${total})...`, progress);
+        }
+      });
+      
+      proc.stderr?.on('data', (data) => { console.error(data.toString()); });
+      
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error('Dependency installation failed'));
+      });
+      
+      proc.on('error', reject);
+    });
+    
+    onProgress?.('Setup complete!', 100);
+    console.log('✓ Dependencies installed successfully');
+    console.log('================================================================================');
+    
+    return { pythonPath: pythonBin, venvPath };
+  } catch (error) {
+    console.error('✗ Linux venv setup failed:', error);
+    if (mainWindow) {
+      dialog.showErrorBox(
+        'Setup Failed',
+        `Failed to set up Python environment:\n\n${error}\n\nPlease check the console for details.`
+      );
+    }
+    return null;
+  }
+}
+
+/**
  * Get the path to the Python backend
  * In dev: use the source directory with system Python
- * In production: use the packaged backend with bundled Python (NO FALLBACK)
+ * In production: use the packaged backend with bundled Python (Windows/macOS) or system venv (Linux)
  */
 async function getBackendPath(): Promise<{ command: string; args: string[]; cwd: string; pythonInfo?: { version?: string; source: string } } | null> {
   if (IS_DEV) {
@@ -186,9 +315,36 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
       pythonInfo
     };
   } else {
-    // Production: ONLY use bundled Python - no fallback to system
+    // Production
     const resourcesPath = process.resourcesPath;
     
+    // Linux: Use system Python + venv in user config directory
+    if (process.platform === 'linux') {
+      console.log('Production mode (Linux): setting up user venv...');
+      
+      // Show setup window if needed
+      const venvInfo = await setupLinuxVenv((message, progress) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('setup-progress', { message, progress });
+        }
+        console.log(`Setup: ${message} ${progress ? `(${progress}%)` : ''}`);
+      });
+      
+      if (!venvInfo) {
+        return null;
+      }
+      
+      console.log(`Using Linux venv Python: ${venvInfo.pythonPath}`);
+      
+      return {
+        command: venvInfo.pythonPath,
+        args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
+        cwd: resourcesPath,
+        pythonInfo: { version: 'system-venv', source: 'Linux user venv' }
+      };
+    }
+    
+    // Windows/macOS: Use bundled Python
     console.log('Production mode: looking for bundled Python interpreter...');
     const pythonInfo = await findBundledPython();
     

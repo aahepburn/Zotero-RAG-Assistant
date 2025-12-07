@@ -42,22 +42,10 @@ jobs:
           npm install
           cd frontend && npm install
       
-      - name: Create Linux Python virtual environment
+      - name: Verify Python is available
         run: |
-          python3 -m venv python-dist
-          python-dist/bin/pip install --upgrade pip
-          python-dist/bin/pip install --no-cache-dir -r requirements.txt
-          # Clean up to reduce size
-          find python-dist -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find python-dist -type f -name "*.pyc" -delete
-          find python-dist -type f -name "*.pyo" -delete
-          find python-dist -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-          find python-dist -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
-      
-      - name: Verify Python environment
-        run: |
-          python-dist/bin/python3 --version
-          python-dist/bin/python3 -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+          python3 --version
+          echo "Python will be installed by the app on first run using system Python"
       
       - name: Build application
         run: npm run build
