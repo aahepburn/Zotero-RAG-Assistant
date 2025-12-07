@@ -1,6 +1,6 @@
 {
-  "name": "zotero-llm-plugin",
-  "productName": "Zotero LLM Assistant",
+  "name": "zotero-rag-assistant",
+  "productName": "Zotero RAG Assistant",
   "version": "0.1.4",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
@@ -11,9 +11,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aahepburn/zotero-llm-plugin.git"
+    "url": "https://github.com/aahepburn/zotero-rag-assistant.git"
   },
-  "homepage": "https://github.com/aahepburn/zotero-llm-plugin",
+  "homepage": "https://github.com/aahepburn/zotero-rag-assistant",
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "python3 -m uvicorn backend.main:app --reload --port 8000",
@@ -43,8 +43,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.aahepburn.zotero-llm",
-    "productName": "Zotero LLM Assistant",
+    "appId": "com.aahepburn.zotero-rag",
+    "productName": "Zotero RAG Assistant",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",
@@ -111,7 +111,8 @@
           "path": "/Applications"
         }
       ],
-      "title": "${productName} ${version}"
+      "title": "${productName} ${version}",
+      "writeUpdateInfo": false
     },
     "win": {
       "target": [
@@ -147,22 +148,13 @@
         {
           "target": "AppImage",
           "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64",
-            "arm64"
+            "x64"
           ]
         },
         {
           "target": "tar.gz",
           "arch": [
-            "x64",
-            "arm64"
+            "x64"
           ]
         }
       ],

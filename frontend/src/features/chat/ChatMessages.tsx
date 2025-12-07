@@ -172,7 +172,7 @@ const ChatMessages: React.FC<Props> = ({ messages, loading }) => {
         {messages.length === 0 && !loading && (
           <div className="message-list__empty">
             <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)" }}>
-              <div style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px" }}>Welcome to Zotero LLM Assistant</div>
+              <div style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px" }}>Welcome to Zotero RAG Assistant</div>
               <div>Ask questions about your research library to get started.</div>
             </div>
           </div>

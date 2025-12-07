@@ -95,7 +95,7 @@ typing_extensions==4.15.0
 unicorn==2.1.4
 urllib3==2.3.0
 uvicorn==0.38.0
-uvloop==0.22.1
+uvloop==0.22.1; sys_platform != 'win32'
 watchfiles==1.1.1
 websocket-client==1.9.0
 websockets==15.0.1

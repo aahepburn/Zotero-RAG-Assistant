@@ -578,7 +578,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 1000,
     minHeight: 600,
-    title: 'Zotero LLM Assistant',
+    title: 'Zotero RAG Assistant',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

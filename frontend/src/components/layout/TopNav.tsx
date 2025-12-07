@@ -104,12 +104,12 @@ const TopNav: React.FC = () => {
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [indexStats, setIndexStats] = useState<any>(null);
   const pollRef = React.useRef<number | null>(null);
-  const [title, setTitle] = useState(session?.title ?? "Zotero LLM Assistant");
+  const [title, setTitle] = useState(session?.title ?? "Zotero RAG Assistant");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showIndexMenu, setShowIndexMenu] = useState(false);
 
   useEffect(() => {
-    setTitle(session?.title ?? "Zotero LLM Assistant");
+    setTitle(session?.title ?? "Zotero RAG Assistant");
   }, [session]);
 
   // Fetch index stats periodically
@@ -307,7 +307,7 @@ const TopNav: React.FC = () => {
           </div>
         ) : (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div className="top-nav__title" onDoubleClick={() => setEditing(true)}>{session?.title ?? "Zotero LLM Assistant"}</div>
+            <div className="top-nav__title" onDoubleClick={() => setEditing(true)}>{session?.title ?? "Zotero RAG Assistant"}</div>
             {session && <button className="btn" onClick={() => setEditing(true)} title="Edit session title">Edit</button>}
           </div>
         )}

@@ -1,4 +1,4 @@
-# Zotero LLM Assistant
+# Zotero RAG Assistant
 
 A desktop application that lets you chat with your Zotero library using large language models. Ask questions about your research and get answers grounded in your own documents, with citations and page numbers.
 
