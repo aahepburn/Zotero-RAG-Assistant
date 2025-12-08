@@ -32,11 +32,13 @@ Download the latest installer from [Releases](https://github.com/aahepburn/Zoter
 1. Download `Zotero-RAG-Assistant-{version}-mac-arm64.dmg` (Apple Silicon) or `-mac-x64.dmg` (Intel)
 2. Open the DMG file
 3. Drag the app icon to the Applications folder
-4. Launch from Applications or Spotlight
+4. Since the app isn't signed by Apple, you will need to run this command in your Terminal first: `xattr -dr com.apple.quarantine "/Applications/Zotero RAG
+ Assistant.app"`
+5. Launch from Applications or Spotlight
 
 **System Requirements:** macOS 10.13 (High Sierra) or later
 
-#### Windows
+#### Windows - (Not tested yet)
 1. Download `Zotero-RAG-Assistant-{version}-win-x64.exe`
 2. Run the installer (may show SmartScreen warning on first run)
 3. Choose installation location (default: `C:\Users\{username}\AppData\Local\Programs\`)
