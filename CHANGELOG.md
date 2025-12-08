@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Linux Installation Path** - Removed spaces from installation directory to fix Electron zygote spawn issues
+  - Changed from `/opt/Zotero RAG Assistant/` to `/opt/zotero-rag-assistant/`
+  - Fixes "failed to execvp" and zygote_host_impl_linux.cc errors on launch
 - **PyInstaller Backend Bundle** - Fixed backend startup issues in packaged Electron app
   - Changed to import FastAPI app object directly instead of string reference
   - Added PIL/Pillow to bundled dependencies (required by sentence-transformers)
