@@ -48,7 +48,7 @@
   },
   "build": {
     "appId": "com.aahepburn.zotero-rag",
-    "productName": "Zotero RAG Assistant",
+    "productName": "ZoteroRAG",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "publish": [
       {
