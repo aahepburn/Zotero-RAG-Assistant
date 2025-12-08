@@ -6,7 +6,7 @@ A desktop application that lets you chat with your Zotero library using large la
 
 This tool indexes the PDFs in your Zotero library and uses retrieval-augmented generation (RAG) to answer questions based on their content. Every answer includes citations to the specific sources and page numbers used, making it easy to verify claims and follow up on interesting findings.
 
-The application runs entirely on your local machine. Your documents and queries stay private.
+The application can run entirely on your local machine. Your documents and queries stay private.
 
 ## Key Features
 
@@ -20,6 +20,13 @@ The application runs entirely on your local machine. Your documents and queries 
 
 
 <img width="1439" height="784" alt="Screenshot 2025-11-30 at 11 23 10 PM" src="https://github.com/user-attachments/assets/d27ea2ff-6337-48ce-8dca-0f9d11d22662" />
+
+## Prerequisites
+
+### Zotero Desktop Client
+
+### Ollama 
+- 
 
 
 ## Installation
