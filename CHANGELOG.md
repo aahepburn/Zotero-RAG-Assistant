@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **PyInstaller Backend Bundle** - Fixed backend startup issues in packaged Electron app
+  - Changed to import FastAPI app object directly instead of string reference
+  - Added PIL/Pillow to bundled dependencies (required by sentence-transformers)
+  - Backend now starts correctly in production builds
 - **Debian Package Dependencies** - Removed obsolete packages from `.deb` dependencies
   - Removed `gconf2`, `gconf-service`, `libappindicator1` (no longer available in modern repos)
   - Added `libgtk-3-0`, `libgbm1` (required Electron runtime libraries)

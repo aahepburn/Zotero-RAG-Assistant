@@ -23,9 +23,12 @@ def main():
     print(f"Starting Zotero RAG Assistant backend server on {host}:{port}")
     print(f"PyInstaller bundle - Python {sys.version}")
     
-    # Run uvicorn with the FastAPI app
+    # Import the app directly (not as a string) so PyInstaller can find it
+    from backend.main import app
+    
+    # Run uvicorn with the FastAPI app object
     uvicorn.run(
-        "backend.main:app",
+        app,
         host=host,
         port=port,
         log_level="info"

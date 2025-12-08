@@ -40,6 +40,8 @@ hiddenimports = [
     'httpx',
     'fitz',
     'pymupdf',
+    'PIL',
+    'PIL.Image',
     'anyio',
     'sniffio',
     'h11',
@@ -79,7 +81,6 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         'matplotlib',
-        'PIL',
         'tkinter',
         'jupyter',
         'notebook',
