@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "Zotero RAG Assistant",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -118,7 +118,23 @@
     },
     "dmg": {
       "title": "${productName} ${version}",
-      "writeUpdateInfo": false
+      "writeUpdateInfo": true,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 400
+      }
     },
     "win": {
       "extraResources": [
@@ -156,10 +172,18 @@
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "${productName}"
+      "shortcutName": "${productName}",
+      "differentialPackage": true
     },
     "linux": {
       "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
         {
           "target": "AppImage",
           "arch": [
@@ -170,7 +194,34 @@
       "icon": "build/icons",
       "category": "Office",
       "synopsis": "AI-powered research assistant for Zotero",
-      "description": "Chat with your Zotero library using AI. Get cited answers, search semantically, and manage your research with intelligent assistance."
+      "description": "Chat with your Zotero library using AI. Get cited answers, search semantically, and manage your research with intelligent assistance.",
+      "desktop": {
+        "Name": "Zotero RAG Assistant",
+        "Comment": "AI-powered research assistant for Zotero",
+        "Categories": "Office;Education;Science;",
+        "StartupWMClass": "zotero-rag-assistant"
+      },
+      "executableName": "zotero-rag-assistant",
+      "maintainer": "aahepburn <your-email@example.com>",
+      "vendor": "aahepburn",
+      "afterInstall": "build/linux-postinstall.sh"
+    },
+    "deb": {
+      "depends": [
+        "gconf2",
+        "gconf-service",
+        "libnotify4",
+        "libappindicator1",
+        "libxtst6",
+        "libnss3",
+        "libxss1",
+        "libasound2"
+      ],
+      "priority": "optional",
+      "afterInstall": "build/linux-postinstall.sh"
+    },
+    "appImage": {
+      "license": "LICENSE"
     }
   }
 }

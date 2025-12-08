@@ -1,304 +1,194 @@
-# Build & Release Checklist - Python Detection
+# Build & Release Checklist
 
-Use this checklist when building and releasing new versions to ensure Python detection works correctly on all platforms.
+Quick reference for building and releasing new versions.
 
-## Pre-Build Checklist
+## Pre-Build
 
-### 1. Verify Code Compiles
+### 1. Code Quality
 ```bash
+# Verify TypeScript compiles
 npm run build:electron
-```
-- [ ] TypeScript compiles without errors
-- [ ] No type errors in console
 
-### 2. Test in Development Mode
-```bash
+# Test in development
 npm run dev
 ```
-- [ ] Backend starts successfully
-- [ ] Frontend loads and connects
-- [ ] Check console for Python detection logs
-- [ ] Verify backend responds at http://localhost:8000/health
+- [ ] No TypeScript errors
+- [ ] Backend starts (http://localhost:8000/health)
+- [ ] Frontend loads (http://localhost:5173)
+- [ ] Basic functionality works
 
-### 3. Bundle Python Environment
+### 2. Bundle Python
 ```bash
-./scripts/bundle-python.sh
+# Clean previous bundle
+rm -rf python-dist/
+
+# Create PyInstaller bundle
+./scripts/bundle-python-pyinstaller.sh
 ```
 - [ ] Script completes without errors
-- [ ] `python-dist/` directory created
-- [ ] Verification passes (imports successful)
-- [ ] Check bundle size is reasonable (~500MB-1GB)
+- [ ] `python-dist/backend_server` exists and is not a symlink
+- [ ] Bundle size ~800MB (includes PyTorch models)
 
-### 4. Test Bundle Locally (Optional but Recommended)
+### 3. Version Bump
+- [ ] Update version in `package.json`
+- [ ] Update `CHANGELOG.md`
+- [ ] Commit: `git commit -am "Bump version to x.x.x"`
+- [ ] Tag: `git tag vx.x.x`
+- [ ] Push: `git push origin master && git push origin vx.x.x`
+
+## Build
+
+### macOS
 ```bash
-# Test the bundled Python directly
-python-dist/bin/python --version
-python-dist/bin/python -c "import fastapi, uvicorn, chromadb"
-```
-- [ ] Bundled Python runs
-- [ ] All imports work
-
-## Build Checklist
-
-### For Linux AppImage
-
-```bash
-npm run package:linux
-```
-
-- [ ] Build completes without errors
-- [ ] AppImage file created in `release/`
-- [ ] File size seems reasonable (>100MB with bundled Python)
-
-### For macOS DMG
-
-```bash
+npm run build
 npm run package:mac
 ```
+**Verify output:**
+- [ ] `release/Zotero-RAG-Assistant-*-mac-arm64.dmg`
+- [ ] `release/Zotero-RAG-Assistant-*-mac-x64.dmg`
+- [ ] `release/*.zip` files (both architectures)
+- [ ] `release/*.blockmap` files
+- [ ] `release/latest-mac.yml` ← Critical for auto-updates!
 
-- [ ] Build completes without errors
-- [ ] DMG file created in `release/`
-- [ ] Both x64 and arm64 builds (if applicable)
-
-### For Windows
-
+### Windows
 ```bash
+npm run build
 npm run package:win
 ```
+**Verify output:**
+- [ ] `release/Zotero-RAG-Assistant-*-win-x64.exe`
+- [ ] `release/*.zip` files
+- [ ] `release/latest.yml` ← Critical for auto-updates!
 
-- [ ] Build completes without errors
-- [ ] Installer created in `release/`
-
-## Post-Build Testing
-
-### Test Matrix
-
-Test each build on the target platform:
-
-#### Linux (Primary Focus)
-
-**Test 1: With System Python 3**
+### Linux
 ```bash
-# Ensure python3 is available
-python3 --version
-
-# Run AppImage
-./release/Zotero-LLM-Assistant-*-linux-*.AppImage --no-sandbox
+npm run build
+npm run package:linux
 ```
-- [ ] App starts without errors
-- [ ] Backend connects
-- [ ] Check logs show Python detection
-- [ ] Verify which Python was used (bundled or system)
+**Verify output:**
+- [ ] `release/zotero-rag-assistant_*_amd64.deb`
+- [ ] `release/zotero-rag-assistant_*_arm64.deb`
+- [ ] `release/Zotero-RAG-Assistant-*-linux-x64.AppImage`
+- [ ] `release/latest-linux.yml` ← Critical for auto-updates!
 
-**Test 2: Without System Python (if possible)**
+## Testing
+
+### Quick Test (All Platforms)
+1. Install the built package
+2. Launch the app
+3. Verify version in Settings
+4. Test basic features:
+   - [ ] Zotero library loads
+   - [ ] Can send a chat message
+   - [ ] Backend responds (check console for errors)
+   - [ ] Settings panel opens
+
+### Platform-Specific Tests
+
+**macOS:**
+- [ ] DMG opens and shows Applications folder shortcut
+- [ ] Can drag to Applications
+- [ ] App launches from Applications folder
+- [ ] No "unidentified developer" warning (if code signed)
+
+**Windows:**
+- [ ] Installer runs without SmartScreen warning (if code signed)
+- [ ] Creates Start Menu shortcut
+- [ ] Can launch from Start Menu
+
+**Linux (.deb):**
 ```bash
-# Simulate missing system Python by temporarily renaming
-sudo mv /usr/bin/python3 /usr/bin/python3.bak
-
-# Run AppImage
-./release/Zotero-LLM-Assistant-*-linux-*.AppImage --no-sandbox
-
-# Should use bundled Python or show clear error
+sudo apt install ./zotero-rag-assistant_*_amd64.deb
+zotero-rag-assistant
 ```
-- [ ] Uses bundled Python successfully OR
-- [ ] Shows clear "Python Not Found" error with installation instructions
+- [ ] Dependencies install automatically
+- [ ] No sandbox warnings (no `--no-sandbox` needed)
+- [ ] Appears in application menu
+- [ ] Can launch from terminal
 
-**Test 3: Run Diagnostic Script (Before Building)**
+**Linux (AppImage):**
 ```bash
-./scripts/test-linux-python.sh
+chmod +x Zotero-RAG-Assistant-*-linux-x64.AppImage
+./Zotero-RAG-Assistant-*-linux-x64.AppImage
 ```
-- [ ] Script detects available Python interpreters
-- [ ] Lists versions correctly
+- [ ] Runs without `--no-sandbox` on modern systems
+- [ ] If sandbox issues occur, verify in docs/LINUX_PACKAGING.md
 
-#### macOS
+### Backend Verification
+Check that Python bundle works:
+- [ ] Backend logs show successful startup
+- [ ] No "Python interpreter missing" errors
+- [ ] Can process chat requests
+- [ ] Vector database operations work
 
-**Test 1: With Bundled Python**
+## Publishing
+
+### Publish to GitHub Releases
 ```bash
-# Open the DMG and install
-open release/Zotero-LLM-Assistant-*.dmg
+# Set GitHub token
+export GH_TOKEN=your_token_here
 
-# Run from Applications
-# Open Console.app to view logs
+# Publish for your platform
+npm run publish:mac    # or :win, :linux
 ```
-- [ ] App starts and runs
-- [ ] Backend connects
-- [ ] Check Console.app for Python detection logs
 
-**Test 2: Check Resource Bundle**
+### Verify GitHub Release
+- [ ] Release created with correct version tag
+- [ ] All installers uploaded
+- [ ] Update metadata files present:
+  - [ ] `latest-mac.yml` (macOS)
+  - [ ] `latest.yml` (Windows)
+  - [ ] `latest-linux.yml` (Linux)
+- [ ] Release notes populated
+
+### Post-Release
+- [ ] Download installer from GitHub to verify
+- [ ] Test update from previous version (if available)
+- [ ] Announce release (if applicable)
+
+## Troubleshooting
+
+### Python Bundle Issues
 ```bash
-# Verify bundled Python exists in .app
-ls -la "/Applications/Zotero LLM Assistant.app/Contents/Resources/python/bin/"
+# Verify bundle is correct
+file python-dist/backend_server
+# Should show: executable (NOT symlink)
+
+# For macOS, check in built app:
+ls -la "release/mac-arm64/Zotero RAG Assistant.app/Contents/Resources/python/"
 ```
-- [ ] python3 exists
-- [ ] python symlink exists
 
-#### Windows
+### Auto-Update Files Missing
+- Check `package.json` has correct `publish` configuration
+- Verify `writeUpdateInfo: true` for DMG (macOS)
+- Verify `differentialPackage: true` for NSIS (Windows)
+- Check electron-builder console output for errors
 
-**Test 1: With Bundled Python**
-```
-# Install via installer
-# Run app
-# Check logs in: %APPDATA%\Zotero LLM Assistant\logs\
-```
-- [ ] App starts and runs
-- [ ] Backend connects
-- [ ] Python detection logs look correct
+### Build Failures
+- Clean and rebuild: `rm -rf release/ dist/ build/`
+- Check Node.js version (16+ required)
+- Check npm install completed without errors
+- Check Python bundle was created before packaging
 
-## Verification Checklist
+## Quick Reference
 
-### Log Output Verification
-
-When the app starts, check console/logs for these messages:
-
-**Expected (Bundled Python):**
-```
-Finding Python interpreter for production...
-  Testing Python candidate: /path/to/resources/python/bin/python3 (bundled)
-  ✓ Found working Python 3.12.3 at /path/to/resources/python/bin/python3
-Using bundled Python: /path/to/resources/python/bin/python3
-Version: 3.12.3
-Source: bundled
-```
-- [ ] Shows "bundled" as source
-- [ ] Python version is reasonable (3.8+)
-- [ ] Backend starts successfully
-
-**Expected (System Python Fallback):**
-```
-Finding Python interpreter for production...
-  Testing Python candidate: /path/to/resources/python/bin/python3 (bundled)
-  ✗ /path/to/resources/python/bin/python3: Command not found
-  Testing Python candidate: python3 (system)
-  ✓ Found working Python 3.12.3 at python3
-Using system Python: python3
-Version: 3.12.3
-Source: system
-```
-- [ ] Shows "system" as source
-- [ ] Tries bundled first, then system
-- [ ] Backend starts successfully
-
-**Expected (Error Case):**
-```
-Finding Python interpreter for production...
-  Testing Python candidate: ... (bundled)
-  ✗ ... Command not found
-  Testing Python candidate: python3 (system)
-  ✗ python3: Command not found
-  Testing Python candidate: python (system)
-  ✗ python: Command not found
-✗ FATAL: Could not find Python interpreter
-```
-- [ ] Shows dialog: "Python Not Found"
-- [ ] Dialog includes platform-specific installation instructions
-- [ ] User can click "Continue Anyway" or "Exit"
-
-### Backend Health Check
-
-After app starts, verify backend:
+**Clean everything:**
 ```bash
-curl http://localhost:8000/health
+rm -rf python-dist/ release/ dist/ build/ node_modules/
+npm install
 ```
 
-Expected response:
-```json
-{
-  "status": "healthy",
-  "components": {
-    "database": "healthy",
-    "vector_db": "healthy",
-    "llm": "healthy"
-  }
-}
-```
-- [ ] Returns 200 OK
-- [ ] Status is "healthy" or "degraded"
-- [ ] Components are listed
-
-## Troubleshooting Common Issues
-
-### Issue: "Python Not Found" on Linux with python3 installed
-
-**Check:**
+**Complete build from scratch:**
 ```bash
-which python3
-python3 --version
+./scripts/bundle-python-pyinstaller.sh
+npm run build
+npm run package:mac  # or :win, :linux
 ```
 
-**Possible causes:**
-- AppImage environment isolation issues
-- Python not in standard locations
-- Bundled Python missing and system Python not detected
-
-**Fix:**
-- Rebuild with bundled Python: `./scripts/bundle-python.sh && npm run package:linux`
-- Or ensure python3 is in /usr/bin/
-
-### Issue: Backend fails to start even with Python detected
-
-**Check logs for:**
-- Missing Python dependencies
-- Port 8000 already in use
-- Backend code errors
-
-**Fix:**
-- If using system Python: `python3 -m pip install -r requirements.txt`
-- If using bundled Python: Rebuild bundle with `./scripts/bundle-python.sh`
-
-### Issue: Bundled Python not found in packaged app
-
-**Check:**
-- `python-dist/` exists before build
-- `package.json` extraResources includes python-dist → python
-- Built app includes `resources/python/` directory
-
-**Fix:**
-- Run `./scripts/bundle-python.sh` before packaging
-- Verify extraResources config in package.json
-
-## Release Checklist
-
-Before creating a GitHub release:
-
-- [ ] All platform builds tested
-- [ ] Python detection works (bundled and fallback)
-- [ ] Error messages are helpful
-- [ ] Update CHANGELOG.md
-- [ ] Update version in package.json
-- [ ] Tag release in git
-- [ ] Upload all builds to GitHub Releases
-- [ ] Write release notes mentioning Python detection improvements
-
-## Quick Commands Summary
-
+**Publish release:**
 ```bash
-# Full build process (Linux example)
-./scripts/bundle-python.sh           # Bundle Python
-npm run build                         # Build frontend & electron
-npm run package:linux                 # Create AppImage
-./release/*.AppImage --no-sandbox    # Test
-
-# Test Python detection
-./scripts/test-linux-python.sh       # Diagnostic
-
-# Clean rebuild
-rm -rf python-dist/ release/ dist/   # Clean
-./scripts/bundle-python.sh           # Re-bundle
-npm run package:linux                # Re-package
+export GH_TOKEN=your_token
+npm run publish:mac  # or :win, :linux
 ```
 
-## Notes
-
-- Always bundle Python before packaging for best user experience
-- Test on clean VMs/systems if possible
-- Keep documentation updated when changing detection logic
-- Monitor user reports of Python issues after release
-
-## Files to Review
-
-Before releasing, review these files:
-- [ ] `electron/main.ts` - Python detection logic
-- [ ] `scripts/bundle-python.sh` - Bundling script
-- [ ] `docs/PYTHON_DETECTION.md` - Technical documentation
-- [ ] `docs/LINUX_PYTHON_GUIDE.md` - User guide
-- [ ] `README.md` - Installation instructions
+See [PYINSTALLER_BUNDLE_GUIDE.md](PYINSTALLER_BUNDLE_GUIDE.md) for detailed build information.

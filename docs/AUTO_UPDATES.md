@@ -292,6 +292,36 @@ const {
 } = useAppUpdater();
 ```
 
+## Publishing Checklist
+
+Use this checklist when publishing a new release:
+
+### Pre-Release
+- [ ] Update version in `package.json`
+- [ ] Update `CHANGELOG.md`
+- [ ] Test on all target platforms
+- [ ] Commit: `git commit -am "Bump version to x.x.x"`
+- [ ] Tag: `git tag vx.x.x`
+- [ ] Push: `git push origin master && git push origin vx.x.x`
+- [ ] Set `GH_TOKEN` environment variable
+
+### Build & Publish
+- [ ] Run: `npm run publish:mac` (or :win, :linux)
+- [ ] Wait for build completion
+- [ ] Check console for errors
+
+### Verify Release
+- [ ] GitHub release created with correct version
+- [ ] All installers uploaded (.dmg/.exe/.deb/AppImage)
+- [ ] Update metadata files present (latest*.yml)
+- [ ] Release notes populated
+
+### Test
+- [ ] Download and install from GitHub release
+- [ ] Verify version in Settings
+- [ ] Test update from previous version (if available)
+- [ ] Verify settings/data preserved after update
+
 ## Related Documentation
 
 - [Electron Updater Documentation](https://www.electron.build/auto-update)

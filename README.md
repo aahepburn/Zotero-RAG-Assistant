@@ -24,59 +24,85 @@ The application runs entirely on your local machine. Your documents and queries 
 
 ## Installation
 
-### Option 1: Desktop App (Recommended)
+### Desktop App (Recommended)
 
-Download the installer for your platform from the [Releases](https://github.com/aahepburn/zotero-llm-plugin/releases) page:
+Download the latest installer from [Releases](https://github.com/aahepburn/Zotero-RAG-Assistant/releases):
 
-- **macOS**: Download the `.dmg` file and drag the app to your Applications folder
-- **Windows**: Download and run the `.exe` installer
-- **Linux**: Download the `.AppImage` file, make it executable (`chmod +x`), and run
-  - **Note**: The AppImage includes Python, but if it fails to detect the bundled version, it will automatically use your system Python 3. Most modern Linux distros have Python 3 pre-installed. See [Linux Python Guide](docs/LINUX_PYTHON_GUIDE.md) if you encounter Python-related errors.
+#### macOS
+1. Download `Zotero-RAG-Assistant-{version}-mac-arm64.dmg` (Apple Silicon) or `-mac-x64.dmg` (Intel)
+2. Open the DMG file
+3. Drag the app icon to the Applications folder
+4. Launch from Applications or Spotlight
 
-The desktop app includes all dependencies and will automatically check for updates. You can install new versions directly from the Settings page.
+**System Requirements:** macOS 10.13 (High Sierra) or later
 
-### Option 2: Run from Source
+#### Windows
+1. Download `Zotero-RAG-Assistant-{version}-win-x64.exe`
+2. Run the installer (may show SmartScreen warning on first run)
+3. Choose installation location (default: `C:\Users\{username}\AppData\Local\Programs\`)
+4. Launch from Start Menu or desktop shortcut
 
-If you want to modify the code or prefer not to use the packaged app:
+**System Requirements:** Windows 10 or later (64-bit)
+
+#### Linux
+
+**Debian/Ubuntu (Recommended)**
+```bash
+# Download the .deb package
+wget https://github.com/aahepburn/Zotero-RAG-Assistant/releases/download/v0.1.7/zotero-rag-assistant_0.1.7_amd64.deb
+
+# Install (automatically handles dependencies)
+sudo apt install ./zotero-rag-assistant_0.1.7_amd64.deb
+
+# Launch from application menu or terminal
+zotero-rag-assistant
+```
+
+**Other Distributions (AppImage)**
+```bash
+# Download AppImage
+wget https://github.com/aahepburn/Zotero-RAG-Assistant/releases/download/v0.1.7/Zotero-RAG-Assistant-0.1.7-linux-x64.AppImage
+
+# Make executable and run
+chmod +x Zotero-RAG-Assistant-0.1.7-linux-x64.AppImage
+./Zotero-RAG-Assistant-0.1.7-linux-x64.AppImage
+```
+
+**System Requirements:** 
+- Modern Linux distribution (Ubuntu 18.04+, Debian 10+, Fedora 28+, or equivalent)
+- User namespaces enabled (default on most systems)
+- See [docs/LINUX_PACKAGING.md](docs/LINUX_PACKAGING.md) for detailed Linux information
+
+**Note:** All installers include Python and dependencies. No additional setup required.
+
+### Run from Source (Developers)
+
+For development or customization:
 
 **Prerequisites:**
-- Python 3.8 or later
-- Node.js 16 or later
-- Zotero with a local library
+- Python 3.8+
+- Node.js 16+
+- Zotero with local library
 
 **Setup:**
-
 ```bash
 git clone https://github.com/aahepburn/Zotero-RAG-Assistant.git
-cd zotero-llm-plugin
+cd Zotero-RAG-Assistant
 
-# Create and activate Python virtual environment
+# Python environment
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install Python dependencies
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Install Node dependencies
+# Node dependencies
 npm install
 cd frontend && npm install && cd ..
 
-# Start the application
-npm run dev  # Runs frontend, backend, and Electron concurrently
+# Run development mode (all services)
+npm run dev
 ```
 
-For web-only development without Electron:
-
-```bash
-# Terminal 1: Backend
-source .venv/bin/activate
-uvicorn backend.main:app --reload
-
-# Terminal 2: Frontend
-cd frontend && npm run dev
-```
-
-Then open http://localhost:5173 in your browser.
+See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for detailed development instructions.
 
 ## Configuration
 
@@ -129,15 +155,19 @@ See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for more details on the build pro
 
 ## Documentation
 
-- [Desktop App Development](docs/DESKTOP_APP.md)
-- [Auto-Updates System](docs/AUTO_UPDATES.md) - Complete guide to the automatic update system
-- [Auto-Updates Quick Start](docs/AUTO_UPDATES_QUICKSTART.md) - Quick reference for users and developers
-- [Python Detection & Bundling](docs/PYTHON_DETECTION.md) - Technical details on cross-platform Python handling
-- [Linux Python Guide](docs/LINUX_PYTHON_GUIDE.md) - User guide for Linux AppImage Python requirements
-- [API Endpoints](docs/api_endpoints.md)
-- [Profile System](docs/profile_system_guide.md)
-- [Multi-Provider Setup](docs/multi_provider_system.md)
-- [RAG System Details](docs/rag_improvements.md)
+**For Users:**
+- [Linux Installation Guide](docs/LINUX_PACKAGING.md) - Detailed Linux setup and troubleshooting
+
+**For Developers:**
+- [Desktop App Development](docs/DESKTOP_APP.md) - Development setup and workflow
+- [Building Releases](docs/PYINSTALLER_BUNDLE_GUIDE.md) - Creating distribution packages
+- [Release Process](docs/RELEASE_PROCESS.md) - Publishing new versions
+
+**Technical Reference:**
+- [API Endpoints](docs/api_endpoints.md) - Backend API documentation
+- [Profile System](docs/profile_system_guide.md) - Multi-profile architecture
+- [Provider System](docs/PROVIDER_QUICKSTART.md) - Adding LLM providers
+- [RAG Implementation](docs/rag_improvements.md) - Retrieval system details
 
 ## License
 

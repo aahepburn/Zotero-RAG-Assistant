@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2025-12-08
+
+### Fixed
+
+- **macOS DMG Installation** - Added Applications folder shortcut for easy drag-and-drop installation
+- **Auto-Updates** - Fixed missing `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` files
+  - macOS: Enabled `writeUpdateInfo: true` for DMG
+  - Windows: Added `differentialPackage: true` for delta updates
+  - Linux: Proper auto-update metadata generation
+- **Python Bundling** - Migrated from venv symlinks to PyInstaller for truly portable bundles
+  - No more "Python interpreter missing" errors
+  - Self-contained executable includes all dependencies
+  - Works without system Python installation
+
+### Added
+
+- **Native Linux .deb packages** for Debian/Ubuntu with proper sandbox configuration
+  - Automatic chrome-sandbox setup via post-install script
+  - No `--no-sandbox` flag needed
+  - System integration via package manager
+  - Support for both amd64 and arm64 architectures
+- **PyInstaller-based Python bundling** for all platforms
+  - Complete standalone backend executable
+  - No symlinks to system Python
+  - Truly relocatable application bundle
+- **Comprehensive Linux packaging documentation** (docs/LINUX_PACKAGING.md)
+- **PyInstaller build guide** (docs/PYINSTALLER_BUNDLE_GUIDE.md)
+
+### Changed
+
+- **Documentation cleanup** - Consolidated and removed redundant docs
+  - Installation instructions now in README for all platforms
+  - Merged auto-update documentation into single comprehensive guide
+  - Removed 12 redundant/outdated documentation files
+  - Clear separation of user vs developer documentation
+
 ## [0.1.3] - 2025-12-02
 
 ### Fixed

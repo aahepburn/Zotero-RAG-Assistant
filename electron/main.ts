@@ -76,9 +76,42 @@ async function checkPythonAvailability(pythonCmd: string): Promise<{ available: 
 /**
  * Find the bundled Python interpreter (production only)
  * Returns the full path to the bundled Python 3 interpreter
+ * Supports both traditional venv bundles and PyInstaller executables
  */
-async function findBundledPython(): Promise<{ path: string; version?: string; source: string } | null> {
+async function findBundledPython(): Promise<{ path: string; version?: string; source: string; isPyInstaller?: boolean } | null> {
   const resourcesPath = process.resourcesPath;
+  
+  // First check for PyInstaller bundle (preferred method)
+  const pyInstallerPaths = [
+    // macOS/Linux - PyInstaller backend executable
+    path.join(resourcesPath, 'python', 'backend_server'),
+    path.join(resourcesPath, 'python', 'backend_server.exe'), // Windows
+  ];
+  
+  console.log('Looking for PyInstaller bundled backend...');
+  for (const execPath of pyInstallerPaths) {
+    console.log(`  Checking: ${execPath}`);
+    if (fs.existsSync(execPath)) {
+      // Check if it's a real file (not a symlink to system Python)
+      const stats = fs.lstatSync(execPath);
+      if (stats.isSymbolicLink()) {
+        console.warn(`  ✗ Found but it's a symlink (invalid bundle)`);
+        continue;
+      }
+      
+      console.log(`  ✓ Found PyInstaller bundle at ${execPath}`);
+      return {
+        path: execPath,
+        version: 'PyInstaller bundle',
+        source: 'bundled-pyinstaller',
+        isPyInstaller: true
+      };
+    } else {
+      console.log(`  ✗ Not found`);
+    }
+  }
+  
+  // Fallback: Check for traditional venv-style Python bundle
   const bundledPythonPaths = [
     // Linux/macOS - Standard locations for bundled Python
     path.join(resourcesPath, 'python', 'bin', 'python3'),
@@ -88,10 +121,21 @@ async function findBundledPython(): Promise<{ path: string; version?: string; so
     path.join(resourcesPath, 'python', 'python.exe'),
   ];
   
-  console.log('Looking for bundled Python interpreter...');
+  console.log('Looking for traditional venv-style bundled Python interpreter...');
   for (const pythonPath of bundledPythonPaths) {
     console.log(`  Checking: ${pythonPath}`);
     if (fs.existsSync(pythonPath)) {
+      // Check if it's a symlink (which would be invalid for distribution)
+      const stats = fs.lstatSync(pythonPath);
+      if (stats.isSymbolicLink()) {
+        const linkTarget = fs.readlinkSync(pythonPath);
+        // If it's an absolute symlink outside our bundle, it's invalid
+        if (path.isAbsolute(linkTarget) && !linkTarget.startsWith(resourcesPath)) {
+          console.warn(`  ✗ Found but it's an invalid symlink to: ${linkTarget}`);
+          continue;
+        }
+      }
+      
       console.log(`  ✓ Found bundled Python at ${pythonPath}`);
       // Verify it's a working Python 3 interpreter
       const result = await checkPythonAvailability(pythonPath);
@@ -100,7 +144,8 @@ async function findBundledPython(): Promise<{ path: string; version?: string; so
         return {
           path: pythonPath,
           version: result.version,
-          source: 'bundled'
+          source: 'bundled-venv',
+          isPyInstaller: false
         };
       } else {
         console.warn(`  ✗ Found file but not a working Python: ${result.error}`);
@@ -353,7 +398,9 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
       console.error('✗ FATAL: Bundled Python interpreter not found');
       console.error('================================================================================');
       console.error(`  Resources path: ${resourcesPath}`);
-      console.error(`  Expected Python locations:`);
+      console.error(`  Expected Python locations (PyInstaller):`);
+      console.error(`    - ${path.join(resourcesPath, 'python', 'backend_server')}`);
+      console.error(`  Expected Python locations (venv fallback):`);
       console.error(`    - ${path.join(resourcesPath, 'python', 'bin', 'python3')}`);
       console.error(`    - ${path.join(resourcesPath, 'python', 'bin', 'python')}`);
       if (process.platform === 'win32') {
@@ -369,12 +416,25 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
     
     console.log(`Using bundled Python: ${pythonInfo.path} (${pythonInfo.version || 'unknown version'})`);
     
-    return {
-      command: pythonInfo.path,
-      args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
-      cwd: resourcesPath,
-      pythonInfo
-    };
+    // PyInstaller bundles are standalone executables that don't need uvicorn arguments
+    if (pythonInfo.isPyInstaller) {
+      console.log('Using PyInstaller bundle - running standalone backend executable');
+      return {
+        command: pythonInfo.path,
+        args: ['--port', BACKEND_PORT.toString()],
+        cwd: resourcesPath,
+        pythonInfo
+      };
+    } else {
+      // Traditional venv-style bundle
+      console.log('Using venv-style bundle - running uvicorn with Python interpreter');
+      return {
+        command: pythonInfo.path,
+        args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
+        cwd: resourcesPath,
+        pythonInfo
+      };
+    }
   }
 }
 
