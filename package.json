@@ -201,14 +201,13 @@
     },
     "deb": {
       "depends": [
-        "gconf2",
-        "gconf-service",
+        "libgtk-3-0",
         "libnotify4",
-        "libappindicator1",
         "libxtst6",
         "libnss3",
         "libxss1",
-        "libasound2"
+        "libasound2",
+        "libgbm1"
       ],
       "priority": "optional",
       "afterInstall": "build/linux-postinstall.sh"

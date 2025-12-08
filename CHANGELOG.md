@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Debian Package Dependencies** - Removed obsolete packages from `.deb` dependencies
+  - Removed `gconf2`, `gconf-service`, `libappindicator1` (no longer available in modern repos)
+  - Added `libgtk-3-0`, `libgbm1` (required Electron runtime libraries)
+  - Fixes "unmet dependencies" errors during `apt` installation on Ubuntu 22.04+
+
 ## [0.1.6] - 2025-12-08
 
 ### Fixed
