@@ -183,12 +183,6 @@
             "x64",
             "arm64"
           ]
-        },
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "icon": "build/icons",
@@ -218,9 +212,6 @@
       ],
       "priority": "optional",
       "afterInstall": "build/linux-postinstall.sh"
-    },
-    "appImage": {
-      "license": "LICENSE"
     }
   }
 }
