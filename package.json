@@ -206,7 +206,6 @@
       "vendor": "aahepburn"
     },
     "deb": {
-      "afterInstall": "build/linux-postinstall.sh",
       "depends": [
         "gconf2",
         "gconf-service",
