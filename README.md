@@ -23,10 +23,47 @@ The application can run entirely on your local machine. Your documents and queri
 
 ## Prerequisites
 
-### Zotero Desktop Client
+To use this application locally, you need:
 
-### Ollama 
-- 
+### 1. Zotero Desktop Client
+
+Install [Zotero](https://www.zotero.org/download/) and sync your library:
+- The app reads your local Zotero database to access PDFs and metadata
+- Make sure Zotero is installed and your library is synced before first launch
+- Default database location:
+  - **macOS:** `~/Zotero/zotero.sqlite`
+  - **Windows:** `C:\Users\{username}\Zotero\zotero.sqlite`
+  - **Linux:** `~/Zotero/zotero.sqlite`
+
+### 2. Ollama (for local LLM support)
+
+Install [Ollama](https://ollama.ai/) to run language models locally:
+
+```bash
+# macOS/Linux - Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Or download from: https://ollama.ai/download
+```
+
+**Download models:**
+```bash
+# Recommended models for chat
+ollama pull llama3.2       # Fast, general-purpose (3B)
+ollama pull mistral        # Good balance (7B)
+ollama pull llama3.1       # Best quality (8B/70B)
+
+# Recommended embedding model (required for semantic search)
+ollama pull nomic-embed-text
+```
+
+**Verify installation:**
+```bash
+ollama list
+# Should show downloaded models
+```
+
+**Alternative:** You can also use cloud providers (OpenAI, Anthropic, Google) by configuring API keys in the app settings.
 
 
 ## Installation
