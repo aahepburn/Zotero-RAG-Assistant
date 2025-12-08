@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "Zotero RAG Assistant",
-  "version": "0.1.7",
+  "version": "0.1.6",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -203,10 +203,10 @@
       },
       "executableName": "zotero-rag-assistant",
       "maintainer": "aahepburn <your-email@example.com>",
-      "vendor": "aahepburn",
-      "afterInstall": "build/linux-postinstall.sh"
+      "vendor": "aahepburn"
     },
     "deb": {
+      "afterInstall": "build/linux-postinstall.sh",
       "depends": [
         "gconf2",
         "gconf-service",

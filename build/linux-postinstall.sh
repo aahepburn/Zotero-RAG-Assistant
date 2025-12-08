@@ -1,33 +1,18 @@
 #!/bin/bash
+
 # Post-install script for Debian package
-# Ensures chrome-sandbox has correct permissions for Electron/Chromium sandbox to work
+# This sets the correct permissions for chrome-sandbox to enable sandboxing
 
-set -e
+INSTALL_DIR="/opt/zotero-rag-assistant"
+SANDBOX="${INSTALL_DIR}/chrome-sandbox"
 
-# Find the chrome-sandbox helper
-# electron-builder typically installs to /opt/{productName}
-APP_DIR="/opt/Zotero RAG Assistant"
-CHROME_SANDBOX="${APP_DIR}/chrome-sandbox"
-
-if [ -f "$CHROME_SANDBOX" ]; then
-    echo "Configuring Electron sandbox permissions..."
-    
-    # Set ownership to root:root
-    chown root:root "$CHROME_SANDBOX" || true
-    
-    # Set setuid bit (mode 4755) so unprivileged users can use the sandbox
-    chmod 4755 "$CHROME_SANDBOX" || true
-    
-    echo "✓ Chrome sandbox configured: ${CHROME_SANDBOX}"
+if [ -f "${SANDBOX}" ]; then
+    echo "Setting chrome-sandbox permissions..."
+    chown root:root "${SANDBOX}"
+    chmod 4755 "${SANDBOX}"
+    echo "chrome-sandbox permissions set successfully"
 else
-    echo "Warning: chrome-sandbox not found at ${CHROME_SANDBOX}"
-    echo "Sandbox may not work properly. App will attempt to run anyway."
-fi
-
-# Ensure the app binary is executable
-APP_BINARY="${APP_DIR}/zotero-rag-assistant"
-if [ -f "$APP_BINARY" ]; then
-    chmod +x "$APP_BINARY" || true
+    echo "Warning: chrome-sandbox not found at ${SANDBOX}"
 fi
 
 exit 0
