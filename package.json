@@ -200,6 +200,7 @@
       "vendor": "aahepburn"
     },
     "deb": {
+      "packageName": "zotero-rag-assistant",
       "depends": [
         "libgtk-3-0",
         "libnotify4",
