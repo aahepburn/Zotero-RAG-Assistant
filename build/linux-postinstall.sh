@@ -6,7 +6,7 @@
 # The chrome-sandbox binary needs to be owned by root with setuid bit
 # to properly sandbox the Chromium renderer processes
 
-INSTALL_DIR="/opt/Zotero RAG Assistant"
+INSTALL_DIR="/opt/ZoteroRAG"
 SANDBOX_PATH="$INSTALL_DIR/chrome-sandbox"
 
 if [ -f "$SANDBOX_PATH" ]; then
