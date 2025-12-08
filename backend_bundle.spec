@@ -38,6 +38,8 @@ hiddenimports = [
     'anthropic',
     'openai',
     'httpx',
+    'fitz',
+    'pymupdf',
     'anyio',
     'sniffio',
     'h11',
