@@ -131,13 +131,16 @@ class AnthropicProvider(BaseProvider):
             if not conversation_messages:
                 raise ProviderError("At least one non-system message is required")
             
-            # Make the API call
+            # Make the API call with 2025 best practices for academic RAG
+            # top_p: 0.9 for nucleus sampling (prevents low-prob hallucinations)
+            # top_k: 50 for vocabulary diversity in technical language
             request_params = {
                 "model": model,
                 "messages": conversation_messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                "top_p": kwargs.get("top_p", 1.0),
+                "top_p": kwargs.get("top_p", 0.9),
+                "top_k": kwargs.get("top_k", 50),
             }
             
             if system_message:

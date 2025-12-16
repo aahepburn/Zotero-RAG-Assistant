@@ -10,6 +10,7 @@ Provides in-memory storage of conversation histories with support for:
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from backend.model_providers import Message
+from backend.academic_prompts import AcademicPrompts
 
 
 @dataclass
@@ -32,14 +33,8 @@ class ConversationStore:
         # Maps session_id -> ConversationHistory
         self._sessions: Dict[str, ConversationHistory] = {}
         
-        # Default system prompt for new sessions
-        self.default_system_prompt = (
-            "You are an expert research assistant helping an academic researcher "
-            "understand their Zotero library. You have access to their academic papers "
-            "and can answer questions about their research. Always cite sources using "
-            "the provided citation numbers [1], [2], etc. Be precise and scholarly in "
-            "your responses."
-        )
+        # Use enhanced academic system prompt (2025 best practices)
+        self.default_system_prompt = AcademicPrompts.get_system_prompt()
     
     def get_messages(self, session_id: str) -> List[Message]:
         """

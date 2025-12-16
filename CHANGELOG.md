@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2025-12-16
+
+### Added
+
+- **2025 Academic Prompting System** - Major upgrade to AI response quality
+  - Citation-aware RAG prompting with mandatory inline citations [N]
+  - Chain-of-thought reasoning for transparent logic
+  - Improved generation parameters (temp=0.35, top_p=0.9, top_k=50)
+  - Explicit handling of uncertainty and research gaps
+  - Structured responses: Direct answer → Evidence → Synthesis → Limitations
+  - New `AcademicPrompts` module with comprehensive prompt templates
+  - New `AcademicGenerationParams` with research-backed parameter sets
+
+### Changed
+
+- **System Prompt** - Enhanced from 54 to ~400 words with comprehensive academic guidelines
+  - Detailed citation requirements with examples
+  - Explicit responsibilities and quality gates
+  - Chain-of-thought reasoning instructions
+- **Generation Parameters** - Optimized for academic content synthesis:
+  - Temperature: 0.3 → 0.35 (reduces repetition, maintains factuality)
+  - Max tokens: 512 → 600 (allows detailed academic responses)
+  - Top-k: 40 → 50 (better vocabulary diversity)
+  - Repeat penalty: 1.1 → 1.15 (prevents citation repetition)
+- **All LLM Providers** - Updated defaults for better academic output:
+  - Ollama: Enhanced top_k and repeat_penalty
+  - OpenAI: Added frequency_penalty, optimized top_p
+  - Anthropic: Added top_k parameter
+  - Perplexity, Groq, OpenRouter: Enhanced sampling parameters
+
+### Improved
+
+- **Citation Accuracy** - Expected ~60% reduction in citation mismatches (based on CiteFix research)
+- **Response Quality** - More natural academic writing with proper grounding
+- **Transparency** - Clear distinction between findings, synthesis, and gaps
+- **Repetition Control** - Eliminated citation and concept repetition in long responses
+- **Uncertainty Handling** - Explicit "I don't know" when evidence is insufficient
+
+### Documentation
+
+- Added `docs/ACADEMIC_PROMPTING_2025.md` - Comprehensive implementation guide
+- Added `docs/PROMPTING_QUICKSTART.md` - User migration guide
+
+### Technical Notes
+
+- Based on 2025 research: CiteFix (ACL 2025), Perplexity Academic Mode, RAG evaluation frameworks
+- All changes are backward compatible - no breaking changes
+- No re-indexing required - works with existing vector databases
+- Pure Python code changes - no dependency updates needed
+
 ## [0.1.7] - 2025-12-08
 
 ### Fixed

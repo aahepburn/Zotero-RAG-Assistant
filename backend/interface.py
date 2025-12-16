@@ -7,6 +7,7 @@ from backend.vector_db import ChromaClient
 from backend.embed_utils import get_embedding, rerank_passages
 from backend.model_providers import ProviderManager, Message
 from backend.conversation_store import ConversationStore
+from backend.academic_prompts import AcademicPrompts, AcademicGenerationParams
 import os
 from collections import OrderedDict
 import threading
@@ -436,67 +437,16 @@ class ZoteroChatbot:
         return base
 
     def build_answer_prompt(self, question: str, snippets: list[dict]) -> str:
-        """Build an optimized prompt for academic question answering.
-        
-        Best practices for academic RAG:
-        - Clear role and constraints
-        - Explicit citation requirements
-        - Structured output format
-        - Encourage critical analysis
-        - Handle uncertainty appropriately
         """
-        if not snippets:
-            return (
-                "You are an academic research assistant. The user asked the following question, "
-                "but no relevant passages were found in their Zotero library.\n\n"
-                f"Question: {question}\n\n"
-                "Respond politely that you cannot find relevant information in their library for this question. "
-                "Suggest they may need to: (1) add relevant papers to their library, or (2) rephrase the question "
-                "to better match their existing papers."
-            )
-
-        # Build rich context with metadata
-        context_blocks = []
-        for s in snippets:
-            cid = s["citation_id"]
-            title = s.get("title", "Untitled")
-            year = s.get("year", "")
-            authors = s.get("authors", "Unknown")  # Get authors if available
-            txt = s.get("snippet", "")
-            
-            # Include bibliographic context
-            bib = f"{authors} ({year})" if year else authors
-            context_blocks.append(f"[{cid}] {title}\n{bib}\n{txt}")
-
-        context = "\n\n".join(context_blocks)
+        Build an optimized prompt for academic question answering.
         
-        return (
-            "You are an expert research assistant helping an academic researcher understand their literature.\n\n"
-            "TASK: Answer the question below using ONLY the provided excerpts from the researcher's library. "
-            "Synthesize information across sources when possible.\n\n"
-            "RESPONSE FORMAT:\n"
-            "1. Start with a direct answer (2-3 sentences) that addresses the core question\n"
-            "2. Follow with 3-5 bullet points elaborating on key details, evidence, or perspectives\n"
-            "3. If sources disagree, acknowledge different viewpoints\n"
-            "4. End with a brief note on limitations or gaps if relevant\n\n"
-            "FORMATTING RULES:\n"
-            "- When using bold text (with **), ALWAYS start it on a new line\n"
-            "- Example: End a sentence with a period.\n\n**Bold Section Title**\n"
-            "- Do NOT write: text continues **Bold Title** on same line\n\n"
-            "CITATION RULES:\n"
-            "- ALWAYS cite sources using [1], [2], etc. after every factual claim\n"
-            "- Use multiple citations [1][2] when several sources support the same point\n"
-            "- Never make claims without supporting citations from the context\n"
-            "- If the context doesn't fully answer the question, explicitly state what's missing\n\n"
-            "CRITICAL REQUIREMENTS:\n"
-            "- Do NOT use outside knowledge - only cite what's in the context\n"
-            "- Do NOT speculate or extrapolate beyond what sources explicitly state\n"
-            "- If sources are insufficient, say so clearly\n\n"
-            "---\n\n"
-            f"QUESTION: {question}\n\n"
-            f"CONTEXT FROM LIBRARY:\n\n{context}\n\n"
-            "---\n\n"
-            "ANSWER:"
+        Uses 2025 best practices for citation-aware RAG prompting.
+        Delegates to AcademicPrompts module for consistent formatting.
+        """
+        return AcademicPrompts.build_answer_prompt(
+            question=question,
+            snippets=snippets,
+            include_reasoning=True  # Enable chain-of-thought for complex questions
         )
 
 
@@ -629,11 +579,17 @@ class ZoteroChatbot:
             messages = [Message(role="user", content=prompt)]
         
         # 5) Call the active LLM provider with full conversation history
+        # Use optimized academic generation parameters (2025 best practices)
+        gen_params = AcademicGenerationParams.get_params("standard")
+        
         try:
             response = self.provider_manager.chat(
                 messages=messages,
-                temperature=0.3,
-                max_tokens=600  # Increased for academic answers
+                temperature=gen_params["temperature"],      # 0.35 for balanced synthesis
+                max_tokens=gen_params["max_tokens"],        # 600 for detailed academic answers
+                top_p=gen_params["top_p"],                  # 0.9 for nucleus sampling
+                top_k=gen_params["top_k"],                  # 50 for vocab diversity
+                repeat_penalty=gen_params["repeat_penalty"] # 1.15 to prevent repetition
             )
             summary = response.content
             
@@ -668,8 +624,8 @@ class ZoteroChatbot:
         """
         Build a user message that combines the question with RAG context.
         
-        This allows the conversation history to maintain full context while
-        injecting fresh evidence from the library for each turn.
+        Uses 2025 best practices for embedding context in conversational flow.
+        Delegates to AcademicPrompts module for consistent formatting.
         
         Args:
             question: The user's raw question
@@ -678,35 +634,16 @@ class ZoteroChatbot:
         Returns:
             Formatted message with question and context
         """
-        if not snippets:
-            return question
-        
-        # Build rich context with metadata
-        context_blocks = []
-        for s in snippets:
-            cid = s["citation_id"]
-            title = s.get("title", "Untitled")
-            year = s.get("year", "")
-            authors = s.get("authors", "Unknown")
-            txt = s.get("snippet", "")
-            page = s.get("page")
-            
-            # Include bibliographic context
-            bib = f"{authors} ({year})" if year else authors
-            page_info = f", p. {page}" if page else ""
-            context_blocks.append(f"[{cid}] {title}{page_info}\n{bib}\n{txt}")
-        
-        context = "\n\n".join(context_blocks)
-        
-        return (
-            f"{question}\n\n"
-            f"RELEVANT CONTEXT FROM LIBRARY:\n\n{context}\n\n"
-            "Please answer using ONLY the provided context. Cite sources using [1], [2], etc."
+        return AcademicPrompts.build_contextual_user_message(
+            question=question,
+            snippets=snippets
         )
     
     def generate_session_title(self, user_question: str, assistant_response: str) -> str:
         """
         Generate a concise title for a chat session based on the first interaction.
+        
+        Uses optimized parameters for short, focused title generation.
         
         Args:
             user_question: The user's first question
@@ -717,19 +654,24 @@ class ZoteroChatbot:
         """
         try:
             print(f"Generating title for question: {user_question[:100]}")
-            prompt = (
-                "Generate a concise, descriptive title (3-8 words) for this research conversation. "
-                "Focus on the main topic or research question.\n\n"
-                f"User asked: {user_question[:300]}\n\n"
-                f"Assistant responded: {assistant_response[:300]}\n\n"
-                "Title (3-8 words, no quotes):"
+            
+            # Use academic prompt template for title generation
+            prompt = AcademicPrompts.build_session_title_prompt(
+                user_question=user_question,
+                assistant_response=assistant_response
             )
+            
+            # Use title-specific generation parameters
+            title_params = AcademicGenerationParams.get_params("title")
             
             messages = [Message(role="user", content=prompt)]
             response = self.provider_manager.chat(
                 messages=messages,
-                temperature=0.7,
-                max_tokens=30
+                temperature=title_params["temperature"],      # 0.7 for creativity
+                max_tokens=title_params["max_tokens"],        # 30 for brevity
+                top_p=title_params["top_p"],
+                top_k=title_params["top_k"],
+                repeat_penalty=title_params["repeat_penalty"]
             )
             
             # Clean up the generated title

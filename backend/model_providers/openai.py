@@ -144,14 +144,16 @@ class OpenAIProvider(BaseProvider):
                 for msg in messages
             ]
             
-            # Make the API call
+            # Make the API call with 2025 best practices for academic RAG
+            # top_p: 0.9 for nucleus sampling (prevents low-prob hallucinations)
+            # frequency_penalty: 0.3 reduces citation/concept repetition
             response = client.chat.completions.create(
                 model=model,
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                top_p=kwargs.get("top_p", 1.0),
-                frequency_penalty=kwargs.get("frequency_penalty", 0.0),
+                top_p=kwargs.get("top_p", 0.9),
+                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
                 presence_penalty=kwargs.get("presence_penalty", 0.0),
             )
             

@@ -96,11 +96,14 @@ class PerplexityProvider(BaseProvider):
                 for msg in messages
             ]
             
+            # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
             response = client.chat.completions.create(
                 model=model,
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                top_p=kwargs.get("top_p", 0.9),
+                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
             )
             
             content = response.choices[0].message.content or ""
@@ -343,11 +346,14 @@ class GroqProvider(BaseProvider):
                 for msg in messages
             ]
             
+            # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
             response = client.chat.completions.create(
                 model=model,
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                top_p=kwargs.get("top_p", 0.9),
+                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
             )
             
             content = response.choices[0].message.content or ""
@@ -466,11 +472,14 @@ class OpenRouterProvider(BaseProvider):
                 for msg in messages
             ]
             
+            # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
             response = client.chat.completions.create(
                 model=model,
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                top_p=kwargs.get("top_p", 0.9),
+                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
             )
             
             content = response.choices[0].message.content or ""
