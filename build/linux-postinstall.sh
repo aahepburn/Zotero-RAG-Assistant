@@ -1,19 +1,20 @@
 #!/bin/bash
-# Post-installation script for Linux .deb package
-# This runs after the package is installed via apt/dpkg
+# Post-install script for Linux .deb package
+# Fixes permissions for chrome-sandbox to enable proper Electron functionality
 
-# Set up chrome-sandbox permissions
-# The chrome-sandbox binary needs to be owned by root with setuid bit
-# to properly sandbox the Chromium renderer processes
+set -e
 
-INSTALL_DIR="/opt/ZoteroRAG"
-SANDBOX_PATH="$INSTALL_DIR/chrome-sandbox"
+# Set proper permissions on chrome-sandbox for security
+# This is required for Electron to run properly on Linux
+if [ -f "/opt/ZoteroRAG/chrome-sandbox" ]; then
+    chmod 4755 "/opt/ZoteroRAG/chrome-sandbox"
+    echo "Set chrome-sandbox permissions"
+fi
 
-if [ -f "$SANDBOX_PATH" ]; then
-    echo "Setting up chrome-sandbox permissions..."
-    chown root:root "$SANDBOX_PATH"
-    chmod 4755 "$SANDBOX_PATH"
-    echo "✓ chrome-sandbox configured"
+# Ensure the application is executable
+if [ -f "/opt/ZoteroRAG/zotero-rag-assistant" ]; then
+    chmod +x "/opt/ZoteroRAG/zotero-rag-assistant"
+    echo "Made application executable"
 fi
 
 exit 0

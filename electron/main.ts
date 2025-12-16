@@ -214,8 +214,46 @@ async function setupLinuxVenv(onProgress?: (message: string, progress?: number) 
   
   // Check if venv already exists and is valid
   if (fs.existsSync(pythonBin)) {
-    console.log(`✓ Linux venv already exists at: ${venvPath}`);
-    return { pythonPath: pythonBin, venvPath };
+    console.log(`Found existing venv at: ${venvPath}`);
+    
+    // Verify uvicorn is installed (critical dependency check)
+    const hasUvicorn = await new Promise<boolean>((resolve) => {
+      const proc = spawn(pythonBin, ['-m', 'uvicorn', '--version']);
+      proc.on('close', (code) => resolve(code === 0));
+      proc.on('error', () => resolve(false));
+      setTimeout(() => { proc.kill(); resolve(false); }, 3000);
+    });
+    
+    if (hasUvicorn) {
+      console.log(`✓ Linux venv valid with all dependencies at: ${venvPath}`);
+      return { pythonPath: pythonBin, venvPath };
+    } else {
+      console.warn('⚠ Existing venv missing dependencies (uvicorn not found)');
+      console.log('Reinstalling dependencies...');
+      
+      // Try to repair by reinstalling dependencies
+      try {
+        const requirementsPath = path.join(process.resourcesPath, 'requirements.txt');
+        if (fs.existsSync(requirementsPath)) {
+          onProgress?.('Updating Python dependencies...', 50);
+          const pipBin = path.join(venvPath, 'bin', 'pip');
+          await new Promise<void>((resolve, reject) => {
+            const proc = spawn(pipBin, ['install', '--no-cache-dir', '-r', requirementsPath]);
+            proc.stdout?.on('data', (data) => console.log(data.toString()));
+            proc.stderr?.on('data', (data) => console.error(data.toString()));
+            proc.on('close', (code) => code === 0 ? resolve() : reject(new Error('Dependency install failed')));
+            proc.on('error', reject);
+          });
+          console.log('✓ Dependencies reinstalled successfully');
+          onProgress?.('Dependencies updated!', 100);
+          return { pythonPath: pythonBin, venvPath };
+        }
+      } catch (error) {
+        console.error('✗ Failed to repair venv:', error);
+        console.log('Will recreate venv from scratch...');
+        // Fall through to recreate venv
+      }
+    }
   }
   
   console.log('================================================================================');
@@ -334,7 +372,7 @@ async function setupLinuxVenv(onProgress?: (message: string, progress?: number) 
 /**
  * Get the path to the Python backend
  * In dev: use the source directory with system Python
- * In production: use the packaged backend with bundled Python (Windows/macOS) or system venv (Linux)
+ * In production: use the packaged backend with bundled PyInstaller executable (all platforms)
  */
 async function getBackendPath(): Promise<{ command: string; args: string[]; cwd: string; pythonInfo?: { version?: string; source: string } } | null> {
   if (IS_DEV) {
@@ -363,33 +401,7 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
     // Production
     const resourcesPath = process.resourcesPath;
     
-    // Linux: Use system Python + venv in user config directory
-    if (process.platform === 'linux') {
-      console.log('Production mode (Linux): setting up user venv...');
-      
-      // Show setup window if needed
-      const venvInfo = await setupLinuxVenv((message, progress) => {
-        if (mainWindow) {
-          mainWindow.webContents.send('setup-progress', { message, progress });
-        }
-        console.log(`Setup: ${message} ${progress ? `(${progress}%)` : ''}`);
-      });
-      
-      if (!venvInfo) {
-        return null;
-      }
-      
-      console.log(`Using Linux venv Python: ${venvInfo.pythonPath}`);
-      
-      return {
-        command: venvInfo.pythonPath,
-        args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
-        cwd: resourcesPath,
-        pythonInfo: { version: 'system-venv', source: 'Linux user venv' }
-      };
-    }
-    
-    // Windows/macOS: Use bundled Python
+    // All platforms (Windows/macOS/Linux): Use bundled Python
     console.log('Production mode: looking for bundled Python interpreter...');
     const pythonInfo = await findBundledPython();
     

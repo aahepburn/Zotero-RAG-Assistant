@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2025-12-16
+
+### Fixed
+
+- **Linux Backend Startup** - Bundled PyInstaller executable for Linux (like Mac/Windows)
+  - Eliminates dependency on system Python and manual venv setup
+  - Fixes "No module named uvicorn" errors on Linux installations
+  - More reliable: self-contained executable with all dependencies
+  - Larger DEB file size (~150MB more) but eliminates installation issues
+
+### Changed
+
+- **Linux Packaging** - Now uses PyInstaller bundle instead of system Python + venv
+  - Consistent backend deployment across all platforms
+  - Simplified Linux installation (no Python prerequisites)
+  - Auto-repair logic removed (no longer needed with bundled approach)
+
 ## [0.1.8] - 2025-12-16
 
 ### Added

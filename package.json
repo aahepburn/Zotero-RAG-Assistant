@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "ZoteroRAG",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -28,7 +28,7 @@
     "package:win": "npm run build && electron-builder --win --publish never",
     "package:linux": "npm run build && electron-builder --linux --publish never",
     "package:all": "npm run build && electron-builder -mwl --publish never",
-    "publish": "npm run build && electron-builder --publish always",
+    "publish": "npm run build && electron-builder -mwl --publish always",
     "publish:mac": "npm run build && electron-builder --mac --publish always",
     "publish:win": "npm run build && electron-builder --win --publish always",
     "publish:linux": "npm run build && electron-builder --linux --publish always",
@@ -176,6 +176,15 @@
       "differentialPackage": true
     },
     "linux": {
+      "extraResources": [
+        {
+          "from": "python-dist",
+          "to": "python",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ],
       "target": [
         {
           "target": "deb",
