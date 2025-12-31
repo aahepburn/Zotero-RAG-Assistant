@@ -401,7 +401,31 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
     // Production
     const resourcesPath = process.resourcesPath;
     
-    // All platforms (Windows/macOS/Linux): Use bundled Python
+    // Linux: Use venv approach (smaller packages, uses system Python)
+    if (process.platform === 'linux') {
+      console.log('Production mode (Linux): Setting up virtual environment...');
+      const venvSetup = await setupLinuxVenv();
+      
+      if (!venvSetup) {
+        console.error('================================================================================');
+        console.error('✗ FATAL: Failed to set up Linux virtual environment');
+        console.error('================================================================================');
+        console.error('  Please ensure Python 3.8+ is installed:');
+        console.error('    sudo apt install python3 python3-pip python3-venv');
+        console.error('================================================================================');
+        return null;
+      }
+      
+      console.log(`Using Linux venv: ${venvSetup.pythonPath}`);
+      return {
+        command: venvSetup.pythonPath,
+        args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
+        cwd: path.join(resourcesPath, 'backend'),
+        pythonInfo: { version: 'venv', source: 'linux-venv' }
+      };
+    }
+    
+    // Windows/macOS: Use bundled PyInstaller executable
     console.log('Production mode: looking for bundled Python interpreter...');
     const pythonInfo = await findBundledPython();
     
