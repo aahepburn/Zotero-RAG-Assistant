@@ -11,18 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Linux Backend Binary Format** - Fixed Linux DEB to contain proper ELF x86-64 binary
-  - Previous v0.1.9 incorrectly bundled macOS Mach-O binary in Linux package
-  - Now builds Linux PyInstaller bundle using Docker (Ubuntu 24.04 container)
-  - Backend now starts correctly on Linux without "Syntax error" failures
-  - Separate python-dist-linux/ directory for Linux-specific builds
+- **Memory Leak** - Fixed orphaned backend processes on app quit
+  - Process tree cleanup kills Python backend and ChromaDB child processes
+  - Unix: Uses negative PID to kill entire process group
+  - Windows: Uses `taskkill /T` for tree termination
+  - Prevents memory accumulation from repeated app launches
 
 ### Changed
 
-- **Build Process** - Linux builds now use Docker-based PyInstaller bundling
-  - Cross-platform binary creation: macOS can build Linux ELF executables
-  - Platform-specific resource directories: python-dist (Mac/Win), python-dist-linux (Linux)
-  - Consistent binary format per platform: Mach-O (Mac), PE (Windows), ELF (Linux)
+- **Linux Packaging** - Reverted to venv approach (from PyInstaller bundle)
+  - PyInstaller bundle exceeded GitHub's 2GB file size limit (2.5GB DEB)
+  - Linux now uses system Python + venv with auto-setup and repair logic
+  - Validates uvicorn installation and auto-repairs if missing
+  - Mac/Windows still use PyInstaller bundles (self-contained)
+  - Smaller Linux DEB (~250MB vs 2.5GB)
 
 ## [0.1.9] - 2025-12-16
 
