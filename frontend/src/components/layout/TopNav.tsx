@@ -417,6 +417,40 @@ const TopNav: React.FC = () => {
                       <div>Chunks: {indexStats.total_chunks}</div>
                       <div>Library: {indexStats.zotero_items} items</div>
                     </div>
+                    {indexStats.new_items > 0 && (
+                      <>
+                        <div style={{ height: 1, background: 'var(--border)' }} />
+                        <button
+                          onClick={async () => {
+                            try {
+                              const resp = await apiFetch('/diagnose_unindexed');
+                              const data = await resp.json();
+                              console.log('Unindexed items diagnostics:', data);
+                              alert(`Diagnostics found ${data.unindexed_count} unindexed items. Check console for details.`);
+                            } catch (err) {
+                              console.error('Failed to fetch diagnostics', err);
+                              alert('Failed to fetch diagnostics. Check console.');
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            border: 'none',
+                            background: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: 14
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div style={{ fontWeight: 500 }}>🔍 Diagnose Sync Issues</div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                            Check why {indexStats.new_items} item{indexStats.new_items !== 1 ? 's' : ''} aren't indexed
+                          </div>
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -454,6 +488,32 @@ const TopNav: React.FC = () => {
                     <span style={{ marginLeft: 8 }}>
                       ({indexStatus.progress.skipped_items} already indexed)
                     </span>
+                  )}
+                </div>
+              )}
+              {/* Show skip reasons if any */}
+              {indexStatus.progress?.skip_reasons && indexStatus.progress.skip_reasons.length > 0 && (
+                <div style={{ 
+                  marginTop: 8, 
+                  padding: 8, 
+                  background: 'rgba(255, 152, 0, 0.08)', 
+                  border: '1px solid rgba(255, 152, 0, 0.3)', 
+                  borderRadius: 4,
+                  fontSize: 11,
+                  color: '#e65100',
+                  maxHeight: 120,
+                  overflow: 'auto'
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    ⚠️ {indexStatus.progress.skip_reasons.length} item(s) skipped:
+                  </div>
+                  {indexStatus.progress.skip_reasons.slice(0, 3).map((reason: string, idx: number) => (
+                    <div key={idx} style={{ marginTop: 2, fontSize: 10 }}>• {reason}</div>
+                  ))}
+                  {indexStatus.progress.skip_reasons.length > 3 && (
+                    <div style={{ marginTop: 4, fontStyle: 'italic' }}>
+                      ...and {indexStatus.progress.skip_reasons.length - 3} more
+                    </div>
                   )}
                 </div>
               )}

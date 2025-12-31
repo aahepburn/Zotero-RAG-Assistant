@@ -490,6 +490,76 @@ def index_stats():
         return {"error": str(e)}
 
 
+@app.get("/diagnose_unindexed")
+def diagnose_unindexed():
+    """Diagnose why specific items aren't being indexed.
+    
+    Returns detailed information about items that should be indexed but aren't.
+    """
+    try:
+        # Get indexed item IDs
+        indexed_ids = chatbot.chroma.get_indexed_item_ids()
+        
+        # Get all Zotero items
+        raw_items = chatbot.zlib.search_parent_items_with_pdfs()
+        zotero_item_ids = {str(it['item_id']) for it in raw_items}
+        
+        # Find unindexed items
+        unindexed_ids = zotero_item_ids - indexed_ids
+        
+        # Get details for each unindexed item
+        unindexed_items = [it for it in raw_items if str(it['item_id']) in unindexed_ids]
+        
+        diagnostics = []
+        for item in unindexed_items:
+            item_id = str(item['item_id'])
+            pdf_path = item.get('pdf_path', '')
+            
+            diagnosis = {
+                "item_id": item_id,
+                "title": item.get('title', 'Unknown'),
+                "pdf_path": pdf_path,
+                "pdf_exists": os.path.exists(pdf_path) if pdf_path else False,
+                "issues": []
+            }
+            
+            # Check for issues
+            if not pdf_path:
+                diagnosis["issues"].append("No PDF path specified")
+            elif not os.path.exists(pdf_path):
+                diagnosis["issues"].append(f"PDF file not found at: {pdf_path}")
+            else:
+                # Try to extract text
+                try:
+                    from backend.pdf import PDF
+                    pdf = PDF(pdf_path)
+                    pages = pdf.extract_text_with_pages()
+                    if not pages:
+                        diagnosis["issues"].append("PDF has no extractable pages")
+                    else:
+                        text = "\\n".join([p['text'] for p in pages])
+                        if not text.strip():
+                            diagnosis["issues"].append("PDF pages exist but contain no text")
+                        else:
+                            diagnosis["text_length"] = len(text)
+                            diagnosis["page_count"] = len(pages)
+                            diagnosis["issues"].append("PDF appears valid - may need manual reindex")
+                except Exception as e:
+                    diagnosis["issues"].append(f"PDF extraction error: {str(e)}")
+            
+            diagnostics.append(diagnosis)
+        
+        return {
+            "unindexed_count": len(unindexed_items),
+            "indexed_count": len(indexed_ids),
+            "zotero_count": len(zotero_item_ids),
+            "diagnostics": diagnostics
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
 @app.get("/embedding_collections")
 def list_embedding_collections():
     """List all available embedding model collections in the database.

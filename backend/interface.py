@@ -48,6 +48,7 @@ class ZoteroChatbot:
             "total_items": 0,
             "start_time": None,
             "elapsed_seconds": 0,
+            "skip_reasons": [],  # Track why items are skipped
             "eta_seconds": None,
         }
         self._index_thread = None
@@ -83,16 +84,25 @@ class ZoteroChatbot:
                 if self._cancel_indexing:
                     break
                 if not (item.filepath and os.path.exists(item.filepath)):
+                    skip_reason = f"Item {item.metadata.get('item_id')}: PDF not found at {item.filepath}"
+                    print(f"SKIPPED: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
                     self.index_progress["processed_items"] += 1
-                    continue  # Skip missing or inaccessible PDFs
+                    continue
                 pdf = PDF(item.filepath)
                 # Use page-aware extraction
-                pages_data = pdf.extract_text_with_pages()
-                # Store page data for later chunking
-                item.metadata['pages_data'] = pages_data
-                # Also store concatenated text for backward compatibility
-                text = "\n\n".join([p['text'] for p in pages_data])
-                item.metadata['text'] = text if text else ""
+                try:
+                    pages_data = pdf.extract_text_with_pages()
+                    item.metadata['pages_data'] = pages_data
+                    text = "\\n\\n".join([p['text'] for p in pages_data])
+                    item.metadata['text'] = text if text else ""
+                    if not text:
+                        print(f"WARNING: Item {item.metadata.get('item_id')} PDF extracted but no text found")
+                except Exception as e:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: PDF extraction failed - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    item.metadata['pages_data'] = []
 
             # Vectorize each item's text (chunk/embedding logic with page tracking)
             for item in items:
@@ -100,23 +110,40 @@ class ZoteroChatbot:
                     break
                 pages_data = item.metadata.get('pages_data') or []
                 if not pages_data:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: No pages data available"
+                    print(f"SKIPPED: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
                     self.index_progress["processed_items"] += 1
                     continue
                 
                 # Chunk with page awareness
                 chunks_with_pages = self.chunk_text_with_pages(pages_data)
                 if not chunks_with_pages:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: No chunks created from pages data"
+                    print(f"SKIPPED: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
                     self.index_progress["processed_items"] += 1
                     continue
                 
                 chunks = [c['text'] for c in chunks_with_pages]
-                vectors = [get_embedding(chunk, self.embedding_model_id) for chunk in chunks]
+                try:
+                    vectors = [get_embedding(chunk, self.embedding_model_id) for chunk in chunks]
+                except Exception as e:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: Embedding generation failed - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
+                    continue
                 
                 # Validate embedding dimensions
                 from backend.embed_utils import get_embedding_dimension
                 expected_dim = get_embedding_dimension(self.embedding_model_id)
                 if vectors and len(vectors[0]) != expected_dim:
-                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}, expected {expected_dim}")
+                    skip_reason = f"Item {item.metadata.get('item_id')}: Unexpected embedding dimension {len(vectors[0])}, expected {expected_dim}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
+                    continue
 
                 # Generate unique chunk IDs
                 item_id = str(item.metadata.get('item_id'))
@@ -145,12 +172,19 @@ class ZoteroChatbot:
                         "page": chunk_info['page'],  # Add page number!
                     })
 
-                self.chroma.add_chunks(
-                    ids=chunk_ids,
-                    documents=chunks,
-                    metadatas=metas,
-                    embeddings=vectors
-                )
+                try:
+                    self.chroma.add_chunks(
+                        ids=chunk_ids,
+                        documents=chunks,
+                        metadatas=metas,
+                        embeddings=vectors
+                    )
+                    print(f"SUCCESS: Indexed item {item_id} with {len(chunks)} chunks")
+                except Exception as e:
+                    skip_reason = f"Item {item_id}: Failed to add to ChromaDB - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                
                 # Update progress after processing this item
                 self.index_progress["processed_items"] += 1
                 
@@ -169,8 +203,21 @@ class ZoteroChatbot:
                 time.sleep(0)
             
             # Build BM25 index after adding all chunks
-            print("Building BM25 index for sparse retrieval...")
-            self.chroma.build_bm25_index()
+            successful_items = self.index_progress["processed_items"] - len(self.index_progress.get("skip_reasons", []))
+            if successful_items > 0:
+                print(f"Building BM25 index for sparse retrieval after indexing {successful_items} items...")
+                self.chroma.build_bm25_index()
+            
+            # Print summary
+            print(f"\\n=== Full Indexing Summary ===")
+            print(f"Total items attempted: {self.index_progress['total_items']}")
+            print(f"Successfully indexed: {successful_items}")
+            print(f"Skipped/Failed: {len(self.index_progress.get('skip_reasons', []))}")
+            if self.index_progress.get('skip_reasons'):
+                print(f"\\nSkip reasons:")
+                for reason in self.index_progress['skip_reasons']:
+                    print(f"  - {reason}")
+            print(f"=============================\\n")
         finally:
             self.is_indexing = False
             self._cancel_indexing = False
@@ -211,13 +258,24 @@ class ZoteroChatbot:
                 if self._cancel_indexing:
                     break
                 if not (item.filepath and os.path.exists(item.filepath)):
+                    skip_reason = f"Item {item.metadata.get('item_id')}: PDF not found at {item.filepath}"
+                    print(f"SKIPPED: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
                     self.index_progress["processed_items"] += 1
                     continue
                 pdf = PDF(item.filepath)
-                pages_data = pdf.extract_text_with_pages()
-                item.metadata['pages_data'] = pages_data
-                text = "\n\n".join([p['text'] for p in pages_data])
-                item.metadata['text'] = text if text else ""
+                try:
+                    pages_data = pdf.extract_text_with_pages()
+                    item.metadata['pages_data'] = pages_data
+                    text = "\n\n".join([p['text'] for p in pages_data])
+                    item.metadata['text'] = text if text else ""
+                    if not text:
+                        print(f"WARNING: Item {item.metadata.get('item_id')} PDF extracted but no text found")
+                except Exception as e:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: PDF extraction failed - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    item.metadata['pages_data'] = []
 
             # Vectorize each new item
             for item in items:
@@ -225,6 +283,9 @@ class ZoteroChatbot:
                     break
                 pages_data = item.metadata.get('pages_data') or []
                 if not pages_data:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: No pages data available"
+                    print(f"SKIPPED: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
                     self.index_progress["processed_items"] += 1
                     continue
                 
@@ -234,12 +295,23 @@ class ZoteroChatbot:
                     continue
                 
                 chunks = [c['text'] for c in chunks_with_pages]
-                vectors = [get_embedding(chunk, self.embedding_model_id) for chunk in chunks]
+                try:
+                    vectors = [get_embedding(chunk, self.embedding_model_id) for chunk in chunks]
+                except Exception as e:
+                    skip_reason = f"Item {item.metadata.get('item_id')}: Embedding generation failed - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
+                    continue
                 
                 from backend.embed_utils import get_embedding_dimension
                 expected_dim = get_embedding_dimension(self.embedding_model_id)
                 if vectors and len(vectors[0]) != expected_dim:
-                    print(f"WARNING: Unexpected embedding dimension {len(vectors[0])} for item {item.metadata.get('item_id')}, expected {expected_dim}")
+                    skip_reason = f"Item {item.metadata.get('item_id')}: Unexpected embedding dimension {len(vectors[0])}, expected {expected_dim}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
+                    continue
 
                 item_id = str(item.metadata.get('item_id'))
                 chunk_ids = [f"{item_id}:{i}" for i in range(len(chunks))]
@@ -266,13 +338,26 @@ class ZoteroChatbot:
                         "page": chunk_info['page'],
                     })
 
-                self.chroma.add_chunks(
-                    ids=chunk_ids,
-                    documents=chunks,
-                    metadatas=metas,
-                    embeddings=vectors
-                )
+                try:
+                    self.chroma.add_chunks(
+                        ids=chunk_ids,
+                        documents=chunks,
+                        metadatas=metas,
+                        embeddings=vectors
+                    )
+                    print(f"SUCCESS: Indexed item {item_id} with {len(chunks)} chunks")
+                except Exception as e:
+                    skip_reason = f"Item {item_id}: Failed to add to ChromaDB - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                
                 self.index_progress["processed_items"] += 1
+                except Exception as e:
+                    skip_reason = f"Item {item_id}: Failed to add to ChromaDB - {str(e)}"
+                    print(f"ERROR: {skip_reason}")
+                    self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
+                    continue
                 
                 # Calculate time estimates
                 elapsed = time.time() - self.index_progress["start_time"]
@@ -288,9 +373,21 @@ class ZoteroChatbot:
                 time.sleep(0)
             
             # Rebuild BM25 index after adding new chunks
-            if self.index_progress["processed_items"] > 0:
-                print("Rebuilding BM25 index...")
+            successful_items = self.index_progress["processed_items"] - len(self.index_progress.get("skip_reasons", []))
+            if successful_items > 0:
+                print(f"Rebuilding BM25 index after indexing {successful_items} items...")
                 self.chroma.build_bm25_index()
+            
+            # Print summary
+            print(f"\n=== Indexing Summary ===")
+            print(f"Total items attempted: {self.index_progress['total_items']}")
+            print(f"Successfully indexed: {successful_items}")
+            print(f"Skipped/Failed: {len(self.index_progress.get('skip_reasons', []))}")
+            if self.index_progress.get('skip_reasons'):
+                print(f"\nSkip reasons:")
+                for reason in self.index_progress['skip_reasons']:
+                    print(f"  - {reason}")
+            print(f"========================\n")
         finally:
             self.is_indexing = False
             self._cancel_indexing = False
@@ -314,6 +411,7 @@ class ZoteroChatbot:
             "eta_seconds": None,
             "skipped_items": 0,
             "mode": "incremental" if incremental else "full",
+            "skip_reasons": [],
         }
         
         # Choose worker based on mode
