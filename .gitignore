@@ -5,6 +5,7 @@ backend/__pycache__/
 node_modules/
 .env
 python-dist/
+python-dist-linux/
 backend/sample_pdfs/
 backend/.DS_Store
 

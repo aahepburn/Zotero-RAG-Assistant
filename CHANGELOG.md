@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2025-12-31
+
+### Fixed
+
+- **Linux Backend Binary Format** - Fixed Linux DEB to contain proper ELF x86-64 binary
+  - Previous v0.1.9 incorrectly bundled macOS Mach-O binary in Linux package
+  - Now builds Linux PyInstaller bundle using Docker (Ubuntu 24.04 container)
+  - Backend now starts correctly on Linux without "Syntax error" failures
+  - Separate python-dist-linux/ directory for Linux-specific builds
+
+### Changed
+
+- **Build Process** - Linux builds now use Docker-based PyInstaller bundling
+  - Cross-platform binary creation: macOS can build Linux ELF executables
+  - Platform-specific resource directories: python-dist (Mac/Win), python-dist-linux (Linux)
+  - Consistent binary format per platform: Mach-O (Mac), PE (Windows), ELF (Linux)
+
 ## [0.1.9] - 2025-12-16
 
 ### Fixed
