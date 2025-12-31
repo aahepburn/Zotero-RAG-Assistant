@@ -420,7 +420,7 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
       return {
         command: venvSetup.pythonPath,
         args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
-        cwd: path.join(resourcesPath, 'backend'),
+        cwd: resourcesPath,
         pythonInfo: { version: 'venv', source: 'linux-venv' }
       };
     }
