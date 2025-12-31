@@ -659,11 +659,20 @@ async function startBackend(): Promise<boolean> {
     }
     console.log('Spawning process...');
     
-    backendProcess = spawn(command, args, {
+    // Spawn in a new process group so we can kill all child processes
+    const spawnOptions: any = {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'], // Explicitly pipe stdout and stderr
       env: backendEnv
-    });
+    };
+    
+    // On Unix, create a new process group (detached but we keep reference)
+    if (process.platform !== 'win32') {
+      spawnOptions.detached = false; // Keep attached but in new group
+      // By default on Unix, spawn creates new process group when shell: false
+    }
+    
+    backendProcess = spawn(command, args, spawnOptions);
     
     console.log(`✓ Process spawned with PID: ${backendProcess.pid}`);
     
@@ -784,16 +793,34 @@ function stopBackend(): void {
   if (backendProcess) {
     console.log('Stopping backend process...');
     
-    // Try graceful shutdown first
-    backendProcess.kill('SIGTERM');
+    const pid = backendProcess.pid;
     
-    // Force kill after timeout
-    setTimeout(() => {
-      if (backendProcess && !backendProcess.killed) {
-        console.log('Force killing backend process...');
+    // Kill entire process tree (Python spawns child processes like ChromaDB)
+    if (pid) {
+      try {
+        if (process.platform === 'win32') {
+          // Windows: use taskkill to kill process tree
+          spawn('taskkill', ['/pid', pid.toString(), '/T', '/F']);
+        } else {
+          // Unix: kill process group (negative PID kills the group)
+          process.kill(-pid, 'SIGTERM');
+          
+          // Force kill after timeout
+          setTimeout(() => {
+            try {
+              process.kill(-pid, 'SIGKILL');
+            } catch (e) {
+              // Process already dead
+            }
+          }, 2000);
+        }
+        console.log('✓ Backend process tree killed');
+      } catch (error) {
+        console.error('Error killing backend:', error);
+        // Fallback to normal kill
         backendProcess.kill('SIGKILL');
       }
-    }, 5000);
+    }
     
     backendProcess = null;
   }
