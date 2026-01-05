@@ -106,6 +106,7 @@ class ZoteroChatbot:
                     skip_reason = f"Item {item.metadata.get('item_id')}: PDF extraction failed - {str(e)}"
                     print(f"ERROR: {skip_reason}")
                     self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
                     item.metadata['pages_data'] = []
 
             # Vectorize each item's text (chunk/embedding logic with page tracking)
@@ -114,10 +115,8 @@ class ZoteroChatbot:
                     break
                 pages_data = item.metadata.get('pages_data') or []
                 if not pages_data:
-                    skip_reason = f"Item {item.metadata.get('item_id')}: No pages data available"
-                    print(f"SKIPPED: {skip_reason}")
-                    self.index_progress["skip_reasons"].append(skip_reason)
-                    self.index_progress["processed_items"] += 1
+                    # Item was already marked as failed in PDF extraction phase
+                    # Skip silently without incrementing progress again
                     continue
                 
                 # Chunk with page awareness
@@ -279,6 +278,7 @@ class ZoteroChatbot:
                     skip_reason = f"Item {item.metadata.get('item_id')}: PDF extraction failed - {str(e)}"
                     print(f"ERROR: {skip_reason}")
                     self.index_progress["skip_reasons"].append(skip_reason)
+                    self.index_progress["processed_items"] += 1
                     item.metadata['pages_data'] = []
 
             # Vectorize each new item
@@ -287,10 +287,8 @@ class ZoteroChatbot:
                     break
                 pages_data = item.metadata.get('pages_data') or []
                 if not pages_data:
-                    skip_reason = f"Item {item.metadata.get('item_id')}: No pages data available"
-                    print(f"SKIPPED: {skip_reason}")
-                    self.index_progress["skip_reasons"].append(skip_reason)
-                    self.index_progress["processed_items"] += 1
+                    # Item was already marked as failed in PDF extraction phase
+                    # Skip silently without incrementing progress again
                     continue
                 
                 chunks_with_pages = self.chunk_text_with_pages(pages_data)
