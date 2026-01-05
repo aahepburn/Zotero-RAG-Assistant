@@ -11,6 +11,7 @@ interface IndexProgress {
   elapsed_seconds?: number;
   eta_seconds?: number | null;
   skipped_items?: number;
+  skip_reasons?: string[];
   mode?: 'incremental' | 'full';
 }
 
@@ -31,7 +32,7 @@ const OllamaStatus: React.FC = () => {
 
   const check = async () => {
     try {
-      const resp = await apiFetch("/ollama_status");
+      const resp = await apiFetch("/api/ollama_status");
       const data = await resp.json();
       setStatus(data.status);
       setModels(data.models || []);
@@ -116,7 +117,7 @@ const TopNav: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const resp = await apiFetch('/index_stats');
+        const resp = await apiFetch('/api/index_stats');
         const data = await resp.json();
         setIndexStats(data);
       } catch (err) {
@@ -134,7 +135,7 @@ const TopNav: React.FC = () => {
     try {
       setReindexing(true);
       setShowIndexMenu(false);
-      const resp = await apiFetch("/index_library", { 
+      const resp = await apiFetch("/api/index_library", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ incremental })
@@ -144,14 +145,14 @@ const TopNav: React.FC = () => {
       // Start polling status
       const poll = async () => {
         try {
-          const r = await apiFetch('/index_status');
+          const r = await apiFetch('/api/index_status');
           const js = await r.json();
           setIndexStatus(js);
           if (js?.status === 'indexing') {
             return false;
           }
           // Refresh stats after indexing completes
-          const statsResp = await apiFetch('/index_stats');
+          const statsResp = await apiFetch('/api/index_stats');
           const statsData = await statsResp.json();
           setIndexStats(statsData);
           return true;
@@ -214,6 +215,32 @@ const TopNav: React.FC = () => {
           <IconPanel>
             {leftCollapsed ? <path d="M9 18l6-6-6-6" stroke="#5b4632" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/> : <path d="M15 18l-6-6 6-6" stroke="#5b4632" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
           </IconPanel>
+        </button>
+        <div style={{ width: 8 }} />
+        <button 
+          className="btn" 
+          onClick={() => {
+            if (!session || session.messages.length === 0) {
+              alert('No chat to copy');
+              return;
+            }
+            const chatText = session.messages.map(m => 
+              `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+            ).join('\n\n');
+            navigator.clipboard.writeText(chatText).then(() => {
+              alert('Chat copied to clipboard!');
+            }).catch(err => {
+              console.error('Failed to copy:', err);
+              alert('Failed to copy chat');
+            });
+          }}
+          disabled={!session || session.messages.length === 0}
+          title="Copy entire chat to clipboard"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </button>
         <div style={{ width: 8 }} />
         <div style={{ position: 'relative' }}>
@@ -423,7 +450,7 @@ const TopNav: React.FC = () => {
                         <button
                           onClick={async () => {
                             try {
-                              const resp = await apiFetch('/diagnose_unindexed');
+                              const resp = await apiFetch('/api/diagnose_unindexed');
                               const data = await resp.json();
                               console.log('Unindexed items diagnostics:', data);
                               alert(`Diagnostics found ${data.unindexed_count} unindexed items. Check console for details.`);
@@ -444,7 +471,7 @@ const TopNav: React.FC = () => {
                           onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
                           onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                         >
-                          <div style={{ fontWeight: 500 }}>🔍 Diagnose Sync Issues</div>
+                          <div style={{ fontWeight: 500 }}>Diagnose Sync Issues</div>
                           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                             Check why {indexStats.new_items} item{indexStats.new_items !== 1 ? 's' : ''} aren't indexed
                           </div>
@@ -484,7 +511,7 @@ const TopNav: React.FC = () => {
               {indexStatus.status === 'indexing' && indexStatus.progress && (
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
                   {indexStatus.progress.processed_items ?? 0} / {indexStatus.progress.total_items ?? 0} items
-                  {indexStatus.progress.mode === 'incremental' && indexStatus.progress.skipped_items > 0 && (
+                  {indexStatus.progress.mode === 'incremental' && (indexStatus.progress.skipped_items ?? 0) > 0 && (
                     <span style={{ marginLeft: 8 }}>
                       ({indexStatus.progress.skipped_items} already indexed)
                     </span>
@@ -505,7 +532,7 @@ const TopNav: React.FC = () => {
                   overflow: 'auto'
                 }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                    ⚠️ {indexStatus.progress.skip_reasons.length} item(s) skipped:
+                    WARNING: {indexStatus.progress.skip_reasons.length} item(s) skipped:
                   </div>
                   {indexStatus.progress.skip_reasons.slice(0, 3).map((reason: string, idx: number) => (
                     <div key={idx} style={{ marginTop: 2, fontSize: 10 }}>• {reason}</div>

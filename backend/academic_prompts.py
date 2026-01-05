@@ -29,7 +29,7 @@ class AcademicPrompts:
     """
     
     # 1. ROLE & CONTEXT - Sets persona and establishes expectations
-    SYSTEM_PROMPT = """You are an expert academic research assistant specializing in synthesizing knowledge from scholarly literature. Your responses must be grounded entirely in the provided documents from the researcher's Zotero library.
+    SYSTEM_PROMPT = """You are an expert academic research assistant specializing in synthesizing knowledge from scholarly literature. Your responses must be grounded in the provided documents from the researcher's Zotero library and our conversation history.
 
 ## Core Responsibilities
 
@@ -38,6 +38,23 @@ class AcademicPrompts:
 - **Identify research gaps**: Point out contradictions, limitations, and open questions in the literature
 - **Maintain academic rigor**: Provide multi-perspective analysis appropriate for scholarly work
 - **Handle uncertainty**: Explicitly acknowledge when evidence is insufficient or ambiguous
+- **Conversational continuity**: Build on prior discussion when answering follow-up questions
+
+## Conversation Handling
+
+This is a **multi-turn conversation**. You should:
+- **Remember context**: Reference and build upon earlier parts of our conversation
+- **Answer naturally**: When the user asks a follow-up question (e.g., "Is there an overlap?" or "What about X?"), directly answer it based on our discussion
+- **Don't reset**: Never respond as if you're starting fresh (e.g., "I'm ready to begin" or "Please pose your first question")
+- **Synthesize**: Connect follow-up questions to earlier topics we've discussed
+
+## Library Access Protocol
+
+You are already wired to the researcher's Zotero library through the surrounding system.
+- **Never ask the user to paste or upload their entire Zotero library**
+- Retrieval has been handled for you - use the provided evidence
+- If the provided evidence or prior conversation is insufficient, say so explicitly and suggest what additional **type of paper or topic** would help
+- Use both retrieved evidence AND our conversation history to answer questions
 
 ## Response Philosophy
 
@@ -107,8 +124,29 @@ Structure your answers for maximum clarity and utility:
 4. **Limitations** (if relevant): Note gaps, contradictions, or areas needing more research
 
 ### Format for Literature Comparisons:
-- Use tables when comparing methods, findings, or approaches across papers
-- Structure: Paper | Key Claim | Method | Finding | Limitation
+When comparing methods, findings, or approaches across papers, use properly formatted markdown tables:
+
+**Table Formatting Requirements:**
+- Use pipe characters (|) to separate columns
+- Include a header row with column names
+- Add a separator row with hyphens (---) under headers
+- Align cells consistently with spaces
+- Keep content concise within cells
+- Use line breaks between table and surrounding text
+
+**Example Structure:**
+```
+| Feature | Paper A [1] | Paper B [2] |
+|---------|-------------|-------------|
+| Method | X approach | Y approach |
+| Finding | Result 1 | Result 2 |
+| Limitation | Issue A | Issue B |
+```
+
+**Common Table Topics:**
+- Methodology comparisons: Paper | Approach | Dataset | Metrics | Results
+- Concept definitions: Term | Source | Definition | Context
+- Approach contrasts: Feature | Method A | Method B | Implications
 
 ### Format for Concept Explanations:
 - Define the concept with citation
@@ -248,26 +286,24 @@ Respond politely that you cannot find relevant information in their library for 
 Maintain a helpful, academic tone and avoid speculation."""
 
     @classmethod
-    def build_contextual_user_message(
+    def build_rag_user_message(
         cls,
         question: str,
         snippets: List[Dict]
     ) -> str:
         """
-        Build a user message that embeds RAG context for conversational flow.
-        
-        This format works better for multi-turn conversations where we want to
-        inject fresh evidence while maintaining chat history.
+        Build a user message with RAG context for questions requiring fresh retrieval.
         
         Args:
             question: User's raw question
-            snippets: Retrieved context snippets
+            snippets: Retrieved context snippets from Zotero
             
         Returns:
             Combined message with question and embedded context
         """
         if not snippets:
-            return question
+            # Fallback to plain message if no snippets
+            return cls.build_plain_user_message(question)
         
         # Build compact context representation
         context_blocks = []
@@ -289,13 +325,92 @@ Maintain a helpful, academic tone and avoid speculation."""
 
 ---
 
-**Relevant Context from Library:**
+**Evidence from Zotero library:**
 
 {context}
 
 ---
 
-Please answer using ONLY the provided context. Cite sources with [1], [2], etc. Acknowledge if information is missing."""
+(Answer using the evidence above. Cite sources with [N]. If this is a follow-up to our earlier discussion, feel free to connect it to what we discussed before.)"""
+
+    @classmethod
+    def build_plain_user_message(cls, question: str) -> str:
+        """
+        Build a plain user message for conversational follow-ups that don't need new retrieval.
+        
+        Args:
+            question: User's raw question
+            
+        Returns:
+            Question with instructions to use conversation history
+        """
+        return f"""{question}
+
+(This is a follow-up question building on our previous discussion. Answer using the conversation history above.)"""
+
+    @classmethod
+    def build_hybrid_user_message(cls, question: str, snippets: List[Dict]) -> str:
+        """
+        Build a hybrid message for follow-ups that introduce new topics needing retrieval.
+        
+        Combines fresh retrieval context with acknowledgment of prior conversation.
+        
+        Args:
+            question: User's raw question (builds on prior discussion)
+            snippets: Retrieved context for new topics introduced
+            
+        Returns:
+            Combined message with new evidence and conversation continuity
+        """
+        if not snippets:
+            return cls.build_plain_user_message(question)
+        
+        # Build context representation
+        context_blocks = []
+        for s in snippets:
+            cid = s.get("citation_id", "?")
+            title = s.get("title", "Untitled")
+            year = s.get("year", "")
+            authors = s.get("authors", "Unknown")
+            text = s.get("snippet", "")
+            page = s.get("page")
+            
+            bib = f"{authors} ({year})" if year else authors
+            page_info = f", p. {page}" if page else ""
+            context_blocks.append(f"[{cid}] {title}{page_info}\n{bib}\n{text}")
+        
+        context = "\n\n".join(context_blocks)
+        
+        return f"""{question}
+
+---
+
+**Additional evidence retrieved on new topics mentioned:**
+
+{context}
+
+---
+
+(This is a follow-up question. Use BOTH the new evidence above AND our earlier conversation to provide a comprehensive answer. Cite new sources with [N] when referencing them.)"""
+
+    @classmethod
+    def build_contextual_user_message(
+        cls,
+        question: str,
+        snippets: List[Dict]
+    ) -> str:
+        """
+        Legacy wrapper for backward compatibility.
+        Delegates to build_rag_user_message.
+        
+        Args:
+            question: User's raw question
+            snippets: Retrieved context snippets
+            
+        Returns:
+            Combined message with question and embedded context
+        """
+        return cls.build_rag_user_message(question, snippets)
 
     @classmethod
     def build_session_title_prompt(
@@ -343,7 +458,7 @@ class AcademicGenerationParams:
     # Standard academic answer generation
     STANDARD = {
         "temperature": 0.35,      # Balance factuality with natural synthesis
-        "max_tokens": 600,        # Allow detailed academic responses
+        "max_tokens": 2000,       # Allow detailed academic responses with full context
         "top_p": 0.9,            # Nucleus sampling prevents low-prob hallucinations
         "top_k": 50,             # Moderate diversity in technical vocabulary
         "repeat_penalty": 1.15,  # Prevent citation/concept repetition

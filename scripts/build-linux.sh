@@ -12,7 +12,7 @@ echo "=========================================="
 
 # Check if running on Linux
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
-    echo "⚠️  Warning: Not running on Linux. The bundled Python will not work on Linux!"
+    echo "  Warning: Not running on Linux. The bundled Python will not work on Linux!"
     echo "Consider building on Linux or using Docker."
 fi
 
@@ -28,7 +28,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 deactivate
 
-echo "✓ Python environment ready at: python-dist-linux/"
+echo " Python environment ready at: python-dist-linux/"
 
 # 3. Temporarily swap python-dist directories
 echo "Swapping Python environments..."
@@ -50,6 +50,6 @@ if [ -d "python-dist-backup" ]; then
 fi
 
 echo "=========================================="
-echo "✓ Build complete!"
+echo " Build complete!"
 echo "AppImages are in: release/"
 echo "=========================================="

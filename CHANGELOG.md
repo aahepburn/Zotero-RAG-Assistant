@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - TBD
+
+### Added
+
+- **Profile-Specific Vector Databases** - Major improvement to profile isolation
+  - Each profile now has its own isolated ChromaDB instance
+  - Automatic profile-specific paths: `~/.zotero-llm/profiles/{profile-id}/chroma`
+  - Switch between profiles without reindexing - each maintains separate embeddings
+  - Support for different embedding models per profile without conflicts
+  - No more shared `user-1` paths
+
+- **Full Windows Support** - Native Windows builds and installers
+  - PyInstaller build scripts for Windows (PowerShell and batch file)
+  - NSIS installer with Desktop shortcut and Start Menu entry
+  - Portable ZIP distribution option
+  - Comprehensive Windows build documentation
+  - Automated Windows builds via GitHub Actions
+
+- **Improved GitHub Actions CI/CD**
+  - Automated builds for macOS, Windows, and Linux on tag push
+  - Parallel builds across all platforms
+  - Automatic GitHub release creation with all artifacts
+  - Build time ~15-25 minutes for all platforms
+
+### Changed
+
+- Vector database path now defaults to profile-specific location instead of hardcoded `user-1`
+- `load_settings()` function now automatically uses profile-specific chroma path
+- Settings UI displays correct profile-specific vector database path
+- Removed global `CHROMA_PATH` constant dependency (now profile-managed)
+
+### Fixed
+
+- Vector database paths not respecting profile system
+- Profiles sharing the same vector database causing data conflicts
+- Inability to use different embedding models in different profiles
+- Settings showing incorrect default chroma path
+
+### Documentation
+
+- Added comprehensive Windows build guide (`docs/WINDOWS_BUILD_GUIDE.md`)
+- Added Windows quick reference (`docs/WINDOWS_BUILD_QUICKREF.md`)
+- Added Windows support tracking document (`docs/WINDOWS_SUPPORT_TODO.md`)
+- Added complete release plan for v0.2.0 (`docs/RELEASE_PLAN_v0.2.0.md`)
+- Updated profile system documentation with vector database isolation details
+
+### Migration Notes
+
+- **Existing Users**: Old vector database at `~/.zotero-llm/chroma/user-1` will not be automatically migrated
+- **To Keep Old Data**: Manually copy `~/.zotero-llm/chroma/user-1` to `~/.zotero-llm/profiles/default/chroma`
+- **Fresh Start**: Just create a new profile and re-index your library
+
 ## [0.1.10] - 2025-12-31
 
 ### Fixed
@@ -188,7 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2024-12-02
 
-### Added - Desktop App Release 🎉
+### Added - Desktop App Release 
 
 - **Native desktop application** using Electron for macOS, Windows, and Linux
 - **Automatic updates** via GitHub Releases - future versions install automatically

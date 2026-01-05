@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import type { Session, Snippet, SourceRef, Message } from "../types/session";
+import type { Session, Snippet, Source, Message } from "../types/session";
+
+// Legacy type alias for backward compatibility
+type SourceRef = Source;
 
 type SessionsShape = {
   sessions: Record<string, Session>;
@@ -9,14 +12,17 @@ type SessionsShape = {
   createSession: (
     initialUserQuestion: string,
     initialAnswer?: string,
-    initialSources?: SourceRef[],
+    responseSources?: Source[],
+    initialSources?: Source[],
     initialSnippets?: Snippet[],
     customTitle?: string,
-  ) => string;
+    userMessageId?: string,
+    assistantMessageId?: string,
+  ) => { sessionId: string; assistantMessageId: string };
   appendMessage: (sessionId: string, message: Message) => void;
   updateSessionTitle: (sessionId: string, newTitle: string) => void;
   addSnippet: (sessionId: string, snippet: Snippet) => void;
-  upsertSource: (sessionId: string, source: SourceRef) => void;
+  upsertSource: (sessionId: string, source: Source) => void;
   setCurrentSession: (id: string | null) => void;
   deleteSession: (id: string) => void;
   toggleLeft: () => void;
@@ -70,11 +76,36 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
     }
   }, [sessions, currentSessionId, leftCollapsed, rightCollapsed]);
 
-  function createSession(initialUserQuestion: string, initialAnswer = "", initialSources: SourceRef[] = [], initialSnippets: Snippet[] = [], customTitle?: string) {
+  function createSession(
+    initialUserQuestion: string, 
+    initialAnswer = "", 
+    responseSources: Source[] = [],
+    initialSources: Source[] = [], 
+    initialSnippets: Snippet[] = [], 
+    customTitle?: string,
+    userMessageId?: string,
+    assistantMessageId?: string,
+  ): { sessionId: string; assistantMessageId: string } {
     const id = crypto.randomUUID();
     const createdAt = nowISO();
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: initialUserQuestion, createdAt };
-    const assistantMsg: Message = { id: crypto.randomUUID(), role: "assistant", content: initialAnswer, createdAt };
+    const userMsgId = userMessageId ?? crypto.randomUUID();
+    const assistantMsgId = assistantMessageId ?? crypto.randomUUID();
+    const userMsg: Message = { 
+      id: userMsgId, 
+      role: "user", 
+      content: initialUserQuestion, 
+      createdAt 
+    };
+    const assistantMsg: Message = { 
+      id: assistantMsgId, 
+      role: "assistant", 
+      content: initialAnswer, 
+      createdAt,
+      sources: responseSources,  // Attach sources to assistant message
+      timestamp: Date.now()
+    };
+    console.log("[SessionsContext] Creating assistant message with sources:", responseSources);
+    console.log("[SessionsContext] Assistant message ID:", assistantMsgId);
     const title = customTitle || (initialUserQuestion || "New session").slice(0, 80);
     const s: Session = {
       id,
@@ -87,7 +118,7 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
     };
     setSessions((prev) => ({ ...prev, [id]: s }));
     setCurrentSessionId(id);
-    return id;
+    return { sessionId: id, assistantMessageId: assistantMsgId };
   }
 
   function appendMessage(sessionId: string, message: Message) {
@@ -122,14 +153,14 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
     });
   }
 
-  function upsertSource(sessionId: string, source: SourceRef) {
+  function upsertSource(sessionId: string, source: Source) {
     setSessions((prev) => {
       const s = prev[sessionId];
       if (!s) return prev;
-      const exists = s.sources.find((x) => x.id === source.id);
+      const exists = s.sources.find((x) => x.documentId === source.documentId);
       const updated = {
         ...s,
-        sources: exists ? s.sources.map((x) => (x.id === source.id ? { ...x, ...source } : x)) : [...s.sources, source],
+        sources: exists ? s.sources.map((x) => (x.documentId === source.documentId ? { ...x, ...source } : x)) : [...s.sources, source],
         updatedAt: nowISO(),
       };
       return { ...prev, [sessionId]: updated };

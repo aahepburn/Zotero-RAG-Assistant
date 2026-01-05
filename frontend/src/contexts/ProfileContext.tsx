@@ -23,7 +23,6 @@ interface ProfileContextType {
   deleteProfile: (id: string, force?: boolean) => Promise<boolean>;
   switchProfile: (id: string) => Promise<boolean>;
   
-  // Import/Export (to be implemented)
   exportProfile: (id: string) => Promise<void>;
   importProfile: (file: File) => Promise<Profile | null>;
 }
@@ -58,7 +57,7 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
       setIsLoading(true);
       setError(null);
       
-      const data = await request<{ profiles: Profile[]; activeProfileId: string | null }>('/profiles');
+      const data = await request<{ profiles: Profile[]; activeProfileId: string | null }>('/api/profiles');
       
       setProfiles(data.profiles || []);
       setActiveProfileId(data.activeProfileId || null);
@@ -79,7 +78,7 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
     try {
       setError(null);
       
-      const data = await request<{ success: boolean; profile: Profile }>('/profiles', {
+      const data = await request<{ success: boolean; profile: Profile }>('/api/profiles', {
         method: 'POST',
         body: JSON.stringify({ id, name, description })
       });
@@ -107,7 +106,7 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
     try {
       setError(null);
       
-      const data = await request<{ success: boolean; profile: Profile }>(`/profiles/${id}`, {
+      const data = await request<{ success: boolean; profile: Profile }>(`/api/profiles/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ name, description })
       });
@@ -131,7 +130,7 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
     try {
       setError(null);
       
-      const url = force ? `/profiles/${id}?force=true` : `/profiles/${id}`;
+      const url = force ? `/api/profiles/${id}?force=true` : `/api/profiles/${id}`;
       const data = await request<{ success: boolean }>(url, {
         method: 'DELETE'
       });
@@ -155,7 +154,7 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
     try {
       setError(null);
       
-      const data = await request<{ success: boolean; activeProfile: Profile }>(`/profiles/${id}/activate`, {
+      const data = await request<{ success: boolean; activeProfile: Profile }>(`/api/profiles/${id}/activate`, {
         method: 'POST'
       });
       
@@ -179,13 +178,13 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
   };
 
   const exportProfile = async (id: string): Promise<void> => {
-    // TODO: Implement profile export
+
     console.log('Export profile:', id);
     setError('Export feature coming soon');
   };
 
   const importProfile = async (file: File): Promise<Profile | null> => {
-    // TODO: Implement profile import
+
     console.log('Import profile:', file.name);
     setError('Import feature coming soon');
     return null;

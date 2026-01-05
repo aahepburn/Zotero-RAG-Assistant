@@ -23,19 +23,17 @@ The Python bundling has been migrated from venv-based bundles to PyInstaller for
 ### New Files
 1. **`backend_server_main.py`** - Entry point wrapper for PyInstaller bundle
 2. **`backend_bundle.spec`** - PyInstaller specification file
-3. **`scripts/bundle-python-pyinstaller.sh`** - New bundling script using PyInstaller
+3. **`scripts/bundle-python-pyinstaller.sh`** - Bundling script using PyInstaller
 
 ### Modified Files
-1. **`package.json`** - DMG configuration updated with Applications folder link and auto-update enabled
+1. **`package.json`** - DMG configuration with Applications folder link and auto-update enabled
 2. **`electron/main.ts`** - Enhanced to detect and run PyInstaller bundles
-
-### Deprecated Files
-- `scripts/bundle-python.sh` - Old venv-based bundling (keep for reference but use new script)
 
 ## How to Build
 
 ### Step 1: Bundle Python Backend (Required before packaging)
 
+**macOS/Linux:**
 ```bash
 # Clean old bundle first
 rm -rf python-dist/
@@ -44,20 +42,32 @@ rm -rf python-dist/
 ./scripts/bundle-python-pyinstaller.sh
 ```
 
+**Windows:**
+```powershell
+# Clean old bundle first
+Remove-Item -Path python-dist -Recurse -Force
+
+# Create new PyInstaller bundle (Option 1: Batch file)
+.\scripts\bundle-python-pyinstaller-windows.bat
+
+# Or Option 2: PowerShell directly
+.\scripts\bundle-python-pyinstaller-windows.ps1
+```
+
 **What this does:**
 - Installs PyInstaller and dependencies
 - Builds standalone backend executable
 - Creates `python-dist/` directory with:
-  - `backend_server` - Standalone executable
+  - `backend_server` (macOS/Linux) or `backend_server.exe` (Windows)
   - Supporting libraries and data files
   - No symlinks!
 
 **Expected output:**
 ```
-✅ PyInstaller bundle created successfully!
-📊 Bundle size: ~800M
-📍 Location: python-dist/
-✓ Backend executable is a proper binary (not a symlink)
+ PyInstaller bundle created successfully!
+ Bundle size: ~800M
+ Location: python-dist/
+ Backend executable is a proper binary (not a symlink)
 ```
 
 ### Step 2: Build Electron App
@@ -96,9 +106,9 @@ npm run package:linux  # Linux
 ### Step 3: Verify DMG Layout
 
 Mount the DMG and check:
-- ✅ App icon visible on left side
-- ✅ Applications folder shortcut on right side
-- ✅ Can drag app to Applications folder
+-  App icon visible on left side
+-  Applications folder shortcut on right side
+-  Can drag app to Applications folder
 
 ### Step 4: Verify Python Bundle
 
@@ -110,6 +120,18 @@ ls -la "release/mac-arm64/Zotero RAG Assistant.app/Contents/Resources/python/"
 # Should show backend_server (not a symlink)
 file "release/mac-arm64/Zotero RAG Assistant.app/Contents/Resources/python/backend_server"
 # Should show: Mach-O 64-bit executable arm64
+```
+
+**Windows:**
+```powershell
+# Check the python-dist directory before packaging
+Get-ChildItem python-dist\backend_server.exe
+
+# Test the executable
+python-dist\backend_server.exe --help
+
+# After packaging, check the app resources
+# The installer places files in: C:\Users\{username}\AppData\Local\Programs\ZoteroRAG\resources\python\
 ```
 
 **Linux:**
@@ -144,10 +166,10 @@ npm run publish:mac
 ```
 
 **Critical:** Verify the release includes:
-- ✅ Both .dmg files (arm64 and x64)
-- ✅ Both .zip files (arm64 and x64)
-- ✅ Both .blockmap files
-- ✅ **latest-mac.yml** file (required for auto-updates!)
+-  Both .dmg files (arm64 and x64)
+-  Both .zip files (arm64 and x64)
+-  Both .blockmap files
+-  **latest-mac.yml** file (required for auto-updates!)
 
 ## Troubleshooting
 

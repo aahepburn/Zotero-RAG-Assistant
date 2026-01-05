@@ -110,9 +110,9 @@ your responses."
 
 ### Temperature Settings for Academic Content
 Industry research shows:
-- **0.2-0.3**: Too rigid, causes phrase/citation repetition ❌
-- **0.35-0.4**: Optimal balance for academic synthesis ✅
-- **>0.5**: Hallucinations increase, contradicts sources ❌
+- **0.2-0.3**: Too rigid, causes phrase/citation repetition 
+- **0.35-0.4**: Optimal balance for academic synthesis 
+- **>0.5**: Hallucinations increase, contradicts sources 
 
 ### Nucleus Sampling (top_p)
 - **top_p=0.9** prevents low-probability hallucinations
@@ -166,7 +166,7 @@ A: "Climate change has significant impacts on global temperatures.
 Studies show warming trends. Multiple papers discuss these effects. 
 The literature indicates various consequences."
 ```
-❌ **Problems**: Vague, no citations, generic claims, no source grounding
+ **Problems**: Vague, no citations, generic claims, no source grounding
 
 ### After (New Prompting)
 ```
@@ -190,7 +190,7 @@ amplification, while [2] focuses on tropical vulnerability.
 **Limitations:** The retrieved documents don't address socioeconomic 
 adaptation strategies or policy interventions in depth."
 ```
-✅ **Improvements**: Specific claims, inline citations, structured format, 
+ **Improvements**: Specific claims, inline citations, structured format, 
 synthesis across sources, acknowledged gaps
 
 ## Files Modified
@@ -206,7 +206,7 @@ synthesis across sources, acknowledged gaps
 ## Migration Notes
 
 ### Backward Compatibility
-✅ All changes are **backward compatible**:
+ All changes are **backward compatible**:
 - Existing sessions continue to work
 - Old prompts are enhanced, not broken
 - Generation parameters can still be overridden

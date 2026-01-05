@@ -1,103 +1,16 @@
 # Desktop App Development Guide
 
-## Quick Start - Desktop Development
+> **Note:** This guide covers desktop app architecture and advanced topics. For build instructions, see:
+> - [BUILD_CHECKLIST.md](BUILD_CHECKLIST.md) - Step-by-step build process
+> - [PYINSTALLER_BUNDLE_GUIDE.md](PYINSTALLER_BUNDLE_GUIDE.md) - Python bundling
+> - [WINDOWS_BUILD_GUIDE.md](WINDOWS_BUILD_GUIDE.md) - Windows-specific builds
+> - [LINUX_PACKAGING.md](LINUX_PACKAGING.md) - Linux-specific builds
 
-### Prerequisites
-1. **Node.js 16+** and **npm**
-2. **Python 3.8+** with venv
-3. **Zotero** installed with a local library
+## Quick Start
 
-### Initial Setup
+See the main [README.md](../README.md) for setup and [BUILD_CHECKLIST.md](BUILD_CHECKLIST.md) for building.
 
-```bash
-# 1. Clone repository
-git clone https://github.com/aahepburn/zotero-llm-plugin.git
-cd zotero-llm-plugin
-
-# 2. Install dependencies
-npm install              # Root dependencies (Electron)
-cd frontend && npm install && cd ..  # Frontend dependencies
-
-# 3. Setup Python environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-# 4. Configure settings (optional - can also do via UI)
-cp .env.example .env
-# Edit .env with your Zotero database path
-```
-
-### Running in Development
-
-The easiest way is to use the combined dev script:
-
-```bash
-npm run dev
-```
-
-This runs three processes concurrently:
-1. **Frontend** - Vite dev server on http://localhost:5173
-2. **Backend** - FastAPI server on http://localhost:8000
-3. **Electron** - Desktop window loading the frontend
-
-Or run them separately in different terminals:
-
-```bash
-# Terminal 1: Frontend
-npm run dev:frontend
-
-# Terminal 2: Backend (activate venv first!)
-source .venv/bin/activate
-npm run dev:backend
-
-# Terminal 3: Electron
-npm run dev:electron
-```
-
-### Platform-Specific Setup
-
-#### macOS
-No additional setup needed. Everything should work out of the box.
-
-```bash
-# If you want to build installers, install dependencies
-npm install
-```
-
-#### Windows
-Use PowerShell or Git Bash:
-
-```bash
-# Activate venv
-.venv\Scripts\activate
-
-# Rest is the same
-npm run dev
-```
-
-#### Ubuntu/Linux
-Install additional build dependencies:
-
-```bash
-# For building native modules
-sudo apt-get install -y build-essential
-
-# For packaging AppImage
-sudo apt-get install -y libfuse2
-
-# Then proceed normally
-npm run dev
-```
-
-## Building Installers
-
-### Build All Platform-Specific Files
-
-```bash
-# Make sure you're in the project root
-npm run build          # Build frontend + Electron TypeScript
-npm run package:mac    # macOS: DMG + ZIP
+## Architecture Overview
 npm run package:win    # Windows: NSIS + ZIP
 npm run package:linux  # Linux: AppImage + DEB
 ```
@@ -187,29 +100,29 @@ This is more reliable but increases app size.
 
 ```
 zotero-llm-plugin/
-├── electron/              # Electron main process
-│   ├── main.ts           # Main process logic
-│   ├── preload.ts        # Preload script (context bridge)
-│   └── tsconfig.json     # TypeScript config
-├── frontend/             # React frontend
-│   ├── src/
-│   └── dist/             # Built frontend (after npm run build)
-├── backend/              # Python FastAPI backend
-│   ├── main.py
-│   └── ...
-├── build/                # Build resources (icons, etc.)
-│   ├── icon.icns        # macOS icon
-│   ├── icon.ico         # Windows icon
-│   ├── icons/           # Linux icons (various sizes)
-│   └── entitlements.mac.plist
-├── dist/                 # Built Electron code
-│   └── electron/
-├── release/              # Built installers
-│   ├── *.dmg
-│   ├── *.exe
-│   └── *.AppImage
-├── package.json          # Root package.json (Electron)
-└── requirements.txt      # Python dependencies
+ electron/              # Electron main process
+    main.ts           # Main process logic
+    preload.ts        # Preload script (context bridge)
+    tsconfig.json     # TypeScript config
+ frontend/             # React frontend
+    src/
+    dist/             # Built frontend (after npm run build)
+ backend/              # Python FastAPI backend
+    main.py
+    ...
+ build/                # Build resources (icons, etc.)
+    icon.icns        # macOS icon
+    icon.ico         # Windows icon
+    icons/           # Linux icons (various sizes)
+    entitlements.mac.plist
+ dist/                 # Built Electron code
+    electron/
+ release/              # Built installers
+    *.dmg
+    *.exe
+    *.AppImage
+ package.json          # Root package.json (Electron)
+ requirements.txt      # Python dependencies
 ```
 
 ## Development Workflow

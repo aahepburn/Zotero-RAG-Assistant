@@ -8,6 +8,7 @@ from backend.embed_utils import get_embedding, rerank_passages
 from backend.model_providers import ProviderManager, Message
 from backend.conversation_store import ConversationStore
 from backend.academic_prompts import AcademicPrompts, AcademicGenerationParams
+from backend.query_condenser import QueryCondenser
 import os
 from collections import OrderedDict
 import threading
@@ -37,6 +38,9 @@ class ZoteroChatbot:
         
         # Initialize conversation store for stateful chat
         self.conversation_store = ConversationStore()
+        
+        # Initialize query condenser for follow-up question handling
+        self.query_condenser = QueryCondenser(self.provider_manager)
         
         # Indexing state for reporting progress via /index_status
         self.is_indexing = False
@@ -350,12 +354,6 @@ class ZoteroChatbot:
                     skip_reason = f"Item {item_id}: Failed to add to ChromaDB - {str(e)}"
                     print(f"ERROR: {skip_reason}")
                     self.index_progress["skip_reasons"].append(skip_reason)
-                
-                self.index_progress["processed_items"] += 1
-                except Exception as e:
-                    skip_reason = f"Item {item_id}: Failed to add to ChromaDB - {str(e)}"
-                    print(f"ERROR: {skip_reason}")
-                    self.index_progress["skip_reasons"].append(skip_reason)
                     self.index_progress["processed_items"] += 1
                     continue
                 
@@ -547,62 +545,94 @@ class ZoteroChatbot:
             include_reasoning=True  # Enable chain-of-thought for complex questions
         )
 
-
-
-
     def chat(self, query, filter_item_ids=None, session_id=None):
         """
-        Process a chat query with stateful conversation history.
+        Process a chat query with stateful conversation history using Perplexity-style architecture.
+        
+        Architecture:
+        1. Load conversation history (if session exists)
+        2. CONDENSE: Convert follow-up questions to standalone queries
+        3. RETRIEVE: Use standalone query for vector search
+        4. GENERATE: Build messages and call LLM
         
         Args:
-            query: User's question
+            query: User's question (may be a follow-up with pronouns/context references)
             filter_item_ids: Optional list of Zotero item IDs to filter search
             session_id: Optional session ID for conversation continuity
             
         Returns:
             Dictionary with summary, citations, and snippets
         """
-        # 1) Retrieve relevant chunks using HYBRID search (dense + sparse)
-        # Best practice from Reddit: Combine semantic and keyword matching
-        # Retrieve more candidates (k=15-20), then re-rank and use top 6-8
-        db_filter = {"item_id": {"$in": filter_item_ids}} if filter_item_ids else None
-        search_prompt = self.build_search_prompt(query)
+        # STEP 1: Load conversation history
+        conversation_history = []
+        is_new_session = False
+        user_turns = 0
         
-        # Use hybrid search combining dense embeddings + BM25
-        results = self.chroma.query_hybrid(query=search_prompt, k=15, where=db_filter, embedding_model_id=self.embedding_model_id) or {}
+        print("\n" + "="*80)
+        print(f"CHAT TURN START: query='{query[:80]}...'")
+        print("="*80)
+        
+        if session_id:
+            conversation_history = self.conversation_store.get_messages(session_id)
+            user_turns = len([m for m in conversation_history if m.role == "user"])
+            is_new_session = (user_turns == 0)
+            print(f"Session {session_id}: user_turns={user_turns}, is_new={is_new_session}")
+            print(f"History has {len(conversation_history)} messages total")
+        
+        # STEP 2: CONDENSE query if it's a follow-up
+        # This is the critical step missing from your original implementation!
+        retrieval_query = query  # Default to original
+        
+        if session_id and self.query_condenser.should_condense(query, conversation_history):
+            print("\nCONDENSATION: Detected follow-up question")
+            retrieval_query = self.query_condenser.condense_query(
+                query=query,
+                conversation_history=conversation_history,
+                max_history_chars=1500
+            )
+            print(f"   Original query: '{query}'")
+            print(f"   Condensed query: '{retrieval_query}'")
+        else:
+            print(f"\nCONDENSATION: Skipped (is_new_session={is_new_session}, turns={user_turns})")
+            print(f"   Using original query: '{query}'")
+        
+        # STEP 3: RETRIEVE using the standalone/condensed query
+        # Use hybrid search (dense + sparse) for best results
+        db_filter = {"item_id": {"$in": filter_item_ids}} if filter_item_ids else None
+        search_prompt = self.build_search_prompt(retrieval_query)  # Use condensed query!
+        
+        results = self.chroma.query_hybrid(
+            query=search_prompt, 
+            k=15, 
+            where=db_filter, 
+            embedding_model_id=self.embedding_model_id
+        ) or {}
 
         docs_outer = results.get("documents", [[]])
         metas_outer = results.get("metadatas", [[]])
-
-        # Chroma: documents/metadatas are nested lists -> take first inner list
         docs = docs_outer[0] if docs_outer else []
         metas = metas_outer[0] if metas_outer else []
         
-        # 2) RE-RANK using cross-encoder for better relevance
-        # This is the key improvement from the Reddit thread
+        # RE-RANK using cross-encoder for better relevance
         if docs:
-            ranked = rerank_passages(query, docs, top_k=10)
-            # Reorder docs and metas based on re-ranking scores
+            ranked = rerank_passages(retrieval_query, docs, top_k=10)  # Use condensed query for ranking!
             docs = [docs[idx] for idx, score in ranked]
             metas = [metas[idx] for idx, score in ranked]
 
-        # 3) Build snippets and citation map with page numbers
-        # Best practice: Prioritize diversity - limit snippets per paper
+        # Build snippets and citation map with page numbers
         snippets = []
         citation_map = OrderedDict()
-        paper_snippet_count = {}  # Track snippets per paper
+        paper_snippet_count = {}
         max_snippets_per_paper = 3
 
         for doc, meta in zip(docs, metas):
-            # meta is a dict here
             title = meta.get("title") or "Untitled"
             year = meta.get("year") or ""
             authors = meta.get("authors") or ""
             pdf_path = meta.get("pdf_path") or ""
-            page = meta.get("page")  # Now we have page numbers!
+            page = meta.get("page")
             key = (title, year, pdf_path)
 
-            # Limit snippets per paper for diversity
             paper_id = f"{title}_{year}"
             if paper_snippet_count.get(paper_id, 0) >= max_snippets_per_paper:
                 continue
@@ -610,10 +640,9 @@ class ZoteroChatbot:
             paper_snippet_count[paper_id] = paper_snippet_count.get(paper_id, 0) + 1
 
             if key not in citation_map:
-                citation_map[key] = len(citation_map) + 1  # 1-based index
+                citation_map[key] = len(citation_map) + 1
 
             cid = citation_map[key]
-            # Keep full chunk for academic context (don't truncate too much)
             snippet_text = (doc or "")[:800]
             snippets.append({
                 "citation_id": cid,
@@ -622,14 +651,13 @@ class ZoteroChatbot:
                 "year": year,
                 "authors": authors,
                 "pdf_path": pdf_path,
-                "page": page,  # Include page number
+                "page": page,
             })
             
-            # Limit total snippets for context window
             if len(snippets) >= 6:
                 break
 
-        # Build citations list with authors - need to get from snippets
+        # Build citations list
         citation_to_authors = {}
         for s in snippets:
             key = (s["title"], s["year"], s["pdf_path"])
@@ -647,49 +675,85 @@ class ZoteroChatbot:
             for (title, year, pdf_path), cid in citation_map.items()
         ]
 
-        # 4) Build conversation with RAG context using stateful history
-        is_new_session = False
+        # STEP 4: BUILD MESSAGES
+        # Critical: For follow-ups, append ONLY the question (no embedded RAG context)
+        # The conversation history already contains the system prompt and prior context
+        
+        print(f"\nMESSAGE CONSTRUCTION: is_new_session={is_new_session}, snippets={len(snippets)}")
+        
         if session_id:
-            # Load conversation history for this session
-            conversation_history = self.conversation_store.get_messages(session_id)
+            # Determine message type based on turn number and snippet availability
+            if is_new_session:
+                # First turn: include full RAG context in user message
+                if snippets:
+                    user_message = self._build_first_turn_message(query, snippets)
+                    print(f"   Building FIRST turn message with {len(snippets)} snippets embedded")
+                    print(f"   Message length: {len(user_message)} chars")
+                else:
+                    user_message = query
+                    print("   Building FIRST turn message (no snippets)")
+            else:
+                # Follow-up turn: ONLY send the question
+                # CRITICAL: NO evidence, NO instructions, NO additional context
+                # The model has the system prompt and full conversation history
+                user_message = query
+                print(f"   Building FOLLOW-UP turn #{user_turns + 1}")
+                print(f"   User message is PLAIN question only: '{user_message[:100]}...'")
+                print(f"   Message length: {len(user_message)} chars")
+                if snippets:
+                    print(f"   NOTE: {len(snippets)} snippets retrieved but NOT added to user message")
+                    print(f"   (Model will answer from conversation history + general knowledge)")
             
-            # Check if this is the first user message (only system message exists)
-            # Must check BEFORE appending the new message
-            is_new_session = len([m for m in conversation_history if m.role == "user"]) == 0
-            print(f"Session {session_id}: is_new_session={is_new_session}, user_messages={len([m for m in conversation_history if m.role == 'user'])}")
-            
-            # Build user message with RAG context embedded
-            user_message_with_context = self.build_contextual_user_message(query, snippets)
-            
-            # Append new user message to history
-            self.conversation_store.append_message(session_id, "user", user_message_with_context)
+            # Append user message to history
+            self.conversation_store.append_message(session_id, "user", user_message)
             
             # Get updated history and trim for context window
             full_history = self.conversation_store.get_messages(session_id)
+            print(f"\nFULL HISTORY before trim: {len(full_history)} messages")
+            for i, msg in enumerate(full_history):
+                preview = msg.content[:100].replace('\n', ' ')
+                print(f"   [{i}] {msg.role:10s}: {preview}...")
+            
             messages = self.conversation_store.trim_messages_for_context(
                 full_history, 
-                max_messages=20,  # Keep last 10 turns (20 messages)
-                max_chars=8000    # Approximate token limit
+                max_messages=20,  # Last 10 turns
+                max_chars=12000   # ~3000 tokens (more room for context)
             )
+            
+            # Log the actual messages being sent to LLM
+            print(f"\nMESSAGES TO LLM: {len(messages)} messages")
+            for i, msg in enumerate(messages):
+                content_preview = msg.content[:150].replace('\n', ' ') + ('...' if len(msg.content) > 150 else '')
+                print(f"   [{i}] {msg.role:10s}: {content_preview}")
         else:
             # Fallback: single-turn conversation (backward compatibility)
+            print("   Building SINGLE-TURN message (no session)")
             prompt = self.build_answer_prompt(query, snippets)
             messages = [Message(role="user", content=prompt)]
         
-        # 5) Call the active LLM provider with full conversation history
-        # Use optimized academic generation parameters (2025 best practices)
+        # STEP 5: GENERATE answer using LLM
         gen_params = AcademicGenerationParams.get_params("standard")
+        
+        print(f"\nLLM GENERATION: Calling provider with temp={gen_params['temperature']}")
         
         try:
             response = self.provider_manager.chat(
                 messages=messages,
-                temperature=gen_params["temperature"],      # 0.35 for balanced synthesis
-                max_tokens=gen_params["max_tokens"],        # 600 for detailed academic answers
-                top_p=gen_params["top_p"],                  # 0.9 for nucleus sampling
-                top_k=gen_params["top_k"],                  # 50 for vocab diversity
-                repeat_penalty=gen_params["repeat_penalty"] # 1.15 to prevent repetition
+                temperature=gen_params["temperature"],
+                max_tokens=gen_params["max_tokens"],
+                top_p=gen_params["top_p"],
+                top_k=gen_params["top_k"],
+                repeat_penalty=gen_params["repeat_penalty"]
             )
             summary = response.content
+            
+            print(f"\nLLM RESPONSE received ({len(summary)} chars)")
+            print(f"   First 200 chars: {summary[:200].replace(chr(10), ' ')}...")
+            
+            # Detect "I'm ready" meta-responses
+            if any(phrase in summary.lower() for phrase in ["i'm ready", "i am ready", "i understand", "okay, i understand"]):
+                print("\nWARNING: Detected meta-response! Model acknowledged instructions instead of answering.")
+                print("    This indicates instructions were embedded in the user message.")
             
             # Save assistant response to conversation history
             if session_id:
@@ -701,22 +765,69 @@ class ZoteroChatbot:
             else:
                 summary = "No relevant passages found in your Zotero library."
 
-        # 6) Generate session title for new sessions
+        # STEP 6: Generate session title for new sessions
         generated_title = None
         if session_id and is_new_session:
-            print(f"Calling generate_session_title with query='{query[:100]}' and summary='{summary[:100]}'")
             generated_title = self.generate_session_title(query, summary)
             print(f"Generated session title: {generated_title}")
-        else:
-            print(f"Not generating title - session_id={session_id}, is_new_session={is_new_session}")
 
-        print(f"Returning from chat() - generated_title={generated_title}")
+        print("\n" + "="*80)
+        print(f"CHAT TURN COMPLETE")
+        print(f"   Citations: {len(citations)}, Snippets: {len(snippets)}")
+        print("="*80 + "\n")
+
         return {
             "summary": summary,
             "citations": citations,
             "snippets": snippets,
-            "generated_title": generated_title,  # Include in response for frontend
+            "generated_title": generated_title,
         }
+    
+    def _build_first_turn_message(self, question: str, snippets: list[dict]) -> str:
+        """Build first turn message with embedded RAG context."""
+        if not snippets:
+            return question
+        
+        # Build compact context
+        context_blocks = []
+        for s in snippets:
+            cid = s.get("citation_id", "?")
+            title = s.get("title", "Untitled")
+            year = s.get("year", "")
+            authors = s.get("authors", "Unknown")
+            text = s.get("snippet", "")
+            page = s.get("page")
+            
+            bib = f"{authors} ({year})" if year else authors
+            page_info = f", p. {page}" if page else ""
+            context_blocks.append(f"[{cid}] {title}{page_info}\n{bib}\n{text}")
+        
+        context = "\n\n".join(context_blocks)
+        
+        return f"""{question}
+
+---
+**Evidence from library:**
+
+{context}"""
+    
+    def _build_new_evidence_note(self, snippets: list[dict]) -> str:
+        """Build a note about new evidence for follow-up turns."""
+        if not snippets:
+            return ""
+        
+        # Compact format: just show what's new
+        items = []
+        for s in snippets[:4]:  # Top 4 snippets only
+            cid = s.get("citation_id", "?")
+            title = s.get("title", "Untitled")
+            year = s.get("year", "")
+            text = s.get("snippet", "")[:200]  # Truncate
+            items.append(f"[{cid}] {title} ({year}): {text}...")
+        
+        return f"""Additional evidence retrieved:
+
+{chr(10).join(items)}"""
     
     def build_contextual_user_message(self, question: str, snippets: list[dict]) -> str:
         """

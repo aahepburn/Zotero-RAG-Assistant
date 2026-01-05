@@ -1,24 +1,38 @@
 export type Snippet = {
   id: string;
-  sourceId: string;
   text: string;
-  locationHint?: string;
-  page?: number | string;
-  title?: string;
-  authors?: string;
-  year?: string | number;
+  context: string;
+  confidence: number;
+  pageNumber?: number;
+  section?: string;
+  characterOffset?: number;
 };
 
-export type SourceRef = {
-  id: string;
+export type Source = {
+  documentId: string;
   title: string;
-  authors?: string;
-  year?: string;
+  author: string;
+  confidence: number;
+  pageNumber?: number;
+  section?: string;
+  retrievalTimestamp: number;
+  snippets: Snippet[];
+  // Legacy fields for backward compatibility
   zoteroKey?: string;
   localPdfPath?: string;
 };
 
-export type Message = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
+// Legacy type alias for backward compatibility
+export type SourceRef = Source;
+
+export type Message = { 
+  id: string; 
+  role: "user" | "assistant"; 
+  content: string; 
+  createdAt: string;
+  sources?: Source[];  // Response-scoped sources
+  timestamp?: number;  // When response was generated
+};
 
 export type Session = {
   id: string;

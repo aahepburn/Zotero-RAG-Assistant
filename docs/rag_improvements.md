@@ -8,7 +8,7 @@ Implemented 4 major improvements to the RAG retrieval system based on best pract
 
 ## Key Improvements Implemented
 
-### 1. ✅ Upgraded Embedding Model to BGE-Base
+### 1.  Upgraded Embedding Model to BGE-Base
 **Impact**: High - Better semantic understanding and retrieval quality
 
 **Changes**:
@@ -26,11 +26,13 @@ model = SentenceTransformer('BAAI/bge-base-en-v1.5')
 - State-of-the-art retrieval quality across diverse domains
 - 2x larger embedding dimension (768 vs 384) captures more semantic nuance
 - Works excellently for both academic and general text
-- Fast inference with ~440MB model size
+- Fast inference with ~400MB model size
+
+**Note**: The system also supports SPECTER (`allenai/specter`) for scientific documents and other embedding models. See `backend/embed_utils.py` for the full list.
 
 ---
 
-### 2. ✅ Cross-Encoder Re-Ranking
+### 2.  Cross-Encoder Re-Ranking
 **Impact**: HIGHEST - The most important improvement per Reddit thread
 
 **Changes**:
@@ -64,7 +66,7 @@ if docs:
 
 ---
 
-### 3. ✅ Page-Aware PDF Chunking
+### 3.  Page-Aware PDF Chunking
 **Impact**: Medium - Better provenance and metadata
 
 **Changes**:
@@ -106,7 +108,7 @@ def chunk_text_with_pages(self, pages_data, chunk_size=800, overlap=200):
 
 ---
 
-### 4. ✅ BM25 Hybrid Search
+### 4.  BM25 Hybrid Search
 **Impact**: High - Combines semantic and keyword matching
 
 **Changes**:
@@ -182,47 +184,47 @@ User Query
 ### Retrieval Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      User Query                              │
-└─────────────────────────────────────────────────────────────┘
+
+                      User Query                              
+
                             ↓
-┌─────────────────────────────────────────────────────────────┐
-│              Stage 1: Hybrid Retrieval                       │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐          ┌─────────────────┐          │
-│  │ Dense Embeddings │          │  BM25 Sparse    │          │
-│  │   (SPECTER2)     │          │   (Keywords)    │          │
-│  │   Top-15 docs    │          │  Top-15 docs    │          │
-│  └──────────────────┘          └─────────────────┘          │
-│           ↓                              ↓                   │
-│           └──────────────┬───────────────┘                   │
-│                          ↓                                   │
-│              Union (deduplicated ~20-25 docs)                │
-└─────────────────────────────────────────────────────────────┘
+
+              Stage 1: Hybrid Retrieval                       
+
+                      
+   Dense Embeddings             BM25 Sparse              
+     (SPECTER)                  (Keywords)              
+     Top-15 docs                Top-15 docs              
+                      
+           ↓                              ↓                   
+                              
+                          ↓                                   
+              Union (deduplicated ~20-25 docs)                
+
                             ↓
-┌─────────────────────────────────────────────────────────────┐
-│         Stage 2: Cross-Encoder Re-Ranking                    │
-├─────────────────────────────────────────────────────────────┤
-│  Score each (query, passage) pair                            │
-│  Sort by relevance score                                     │
-│  Select top-10 best matches                                  │
-└─────────────────────────────────────────────────────────────┘
+
+         Stage 2: Cross-Encoder Re-Ranking                    
+
+  Score each (query, passage) pair                            
+  Sort by relevance score                                     
+  Select top-10 best matches                                  
+
                             ↓
-┌─────────────────────────────────────────────────────────────┐
-│         Stage 3: Diversity & Context Limiting                │
-├─────────────────────────────────────────────────────────────┤
-│  Max 3 snippets per paper (diversity)                        │
-│  Max 6 total snippets (context window)                       │
-│  Include page numbers for provenance                         │
-└─────────────────────────────────────────────────────────────┘
+
+         Stage 3: Diversity & Context Limiting                
+
+  Max 3 snippets per paper (diversity)                        
+  Max 6 total snippets (context window)                       
+  Include page numbers for provenance                         
+
                             ↓
-┌─────────────────────────────────────────────────────────────┐
-│              Stage 4: LLM Answer Generation                  │
-├─────────────────────────────────────────────────────────────┤
-│  Build structured prompt with snippets                       │
-│  Generate answer with citations                              │
-│  Return answer + snippet metadata                            │
-└─────────────────────────────────────────────────────────────┘
+
+              Stage 4: LLM Answer Generation                  
+
+  Build structured prompt with snippets                       
+  Generate answer with citations                              
+  Return answer + snippet metadata                            
+
 ```
 
 ---
@@ -233,7 +235,7 @@ User Query
 - Added: `rank-bm25==0.2.2`
 
 ### 2. `backend/embed_utils.py`
-- Upgraded model to SPECTER2
+- Upgraded model to SPECTER
 - Added cross-encoder re-ranker
 - Added `rerank_passages()` function
 
@@ -268,7 +270,7 @@ pip install rank-bm25
 
 2. **Re-index Your Library**:
 The first time you use the new system, you need to re-index to:
-- Generate SPECTER2 embeddings
+- Generate SPECTER embeddings
 - Build BM25 index
 - Extract page numbers
 
@@ -280,7 +282,7 @@ In the frontend, click "Index Library" to rebuild the index.
 For each PDF:
 1. Extract text by page → [{'page_num': 1, 'text': '...'}, ...]
 2. Chunk with page tracking → [{'text': '...', 'page': 1}, ...]
-3. Generate SPECTER2 embeddings
+3. Generate SPECTER embeddings
 4. Store chunks with page metadata
 5. Build BM25 index from all chunks
 6. Persist BM25 index to disk
@@ -292,7 +294,7 @@ For each PDF:
 User asks: "What are the main findings on climate change impacts?"
 
 1. Hybrid Search:
-   - SPECTER2 semantic search → 15 results
+   - SPECTER semantic search → 15 results
    - BM25 keyword search → 15 results
    - Union → ~22 unique passages
 
@@ -332,7 +334,7 @@ User asks: "What are the main findings on climate change impacts?"
 Based on Reddit thread and research:
 - Re-ranking: +30-50% precision
 - Hybrid search: +20-30% recall
-- SPECTER2: +15-25% for academic queries
+- SPECTER: +15-25% for academic queries
 - **Combined**: 40-60% better end-to-end quality
 
 ---
@@ -440,3 +442,179 @@ These improvements bring your Zotero RAG system in line with current best practi
 Should result in significantly better retrieval quality across all query types. The Reddit thread author saw these techniques as essential for achieving production-quality RAG systems.
 
 **Note**: After upgrading, you MUST re-index your library to use the new 768-dimensional embeddings. The old 384-dimensional index is incompatible.
+# Multiple Embedding Models Support
+
+## Overview
+
+The Zotero LLM Plugin now supports using multiple embedding models without conflicts. Each embedding model creates its own separate vector database collection, allowing you to:
+
+- Switch between embedding models without losing your indexed data
+- Compare different embedding models' performance
+- Index your library with multiple models simultaneously
+
+## How It Works
+
+### Collection Naming
+
+Each embedding model gets its own ChromaDB collection with a unique name:
+- `zotero_lib_bge-base` - For BGE-Base model (768 dimensions)
+- `zotero_lib_specter` - For SPECTER model (768 dimensions)
+- `zotero_lib_minilm-l6` - For MiniLM-L6 model (384 dimensions)
+- `zotero_lib_minilm-l3` - For MiniLM-L3 model (384 dimensions)
+
+### BM25 Indexes
+
+Each embedding model also maintains its own BM25 sparse retrieval index:
+- `bm25_index_bge-base.pkl`
+- `bm25_index_specter.pkl`
+- `bm25_index_minilm-l6.pkl`
+- `bm25_index_minilm-l3.pkl`
+
+## Switching Embedding Models
+
+### In Settings
+
+1. Go to Settings
+2. Change the **Embedding Model** dropdown
+3. Click **Save Settings**
+4. The system will automatically switch to the collection for that model
+
+### First Time Using a Model
+
+If you switch to an embedding model that hasn't been used yet:
+1. The collection will be empty (0 items indexed)
+2. Go to the main screen
+3. Click **Index Library** (or **Full Reindex**)
+4. Your library will be indexed with the new embedding model
+
+### Switching Back
+
+You can switch back to a previously used embedding model at any time:
+- All your previous indexing work is preserved
+- The system instantly switches to that model's collection
+- No re-indexing needed
+
+## API Endpoints
+
+### Check Current Status
+
+```bash
+GET /index_stats
+```
+
+Returns:
+```json
+{
+  "indexed_items": 42,
+  "total_chunks": 1234,
+  "zotero_items": 50,
+  "new_items": 8,
+  "needs_sync": true,
+  "current_embedding_model": "bge-base",
+  "collection_name": "zotero_lib_bge-base"
+}
+```
+
+### List All Collections
+
+```bash
+GET /embedding_collections
+```
+
+Returns:
+```json
+{
+  "collections": [
+    {
+      "collection_name": "zotero_lib_bge-base",
+      "embedding_model_id": "bge-base",
+      "item_count": 5420,
+      "is_current": true
+    },
+    {
+      "collection_name": "zotero_lib_minilm-l6",
+      "embedding_model_id": "minilm-l6",
+      "item_count": 5420,
+      "is_current": false
+    }
+  ],
+  "current_embedding_model": "bge-base"
+}
+```
+
+## Storage Considerations
+
+Each embedding model requires separate storage:
+- **768-dimensional models** (BGE-Base, SPECTER): ~500-800 MB per 1000 documents
+- **384-dimensional models** (MiniLM): ~250-400 MB per 1000 documents
+
+If you have a large library and test multiple models, you may want to periodically clean up unused collections.
+
+## Benefits
+
+### No More Dimension Mismatch Errors
+
+Previously, changing embedding models would cause errors like:
+```
+embedding with dimension 384 doesn't match existing collection dimension 768
+```
+
+Now each model has its own collection, so this error is impossible.
+
+### Easy Comparison
+
+You can:
+1. Index with BGE-Base (high quality)
+2. Index with MiniLM-L3 (fast)
+3. Switch between them to compare retrieval quality
+4. Keep both indexed for different use cases
+
+### Zero Downtime Switching
+
+- No need to delete and re-index when switching
+- Instant switching between models
+- All data preserved
+
+## Technical Details
+
+### Implementation
+
+The `ChromaClient` class now accepts an `embedding_model_id` parameter:
+
+```python
+# Creates collection: zotero_lib_bge-base
+chroma = ChromaClient(
+    db_path="/path/to/chroma",
+    embedding_model_id="bge-base"
+)
+```
+
+### Metadata
+
+Each collection stores its embedding model in metadata:
+
+```python
+{
+    "hnsw:space": "cosine",
+    "embedding_model": "bge-base"
+}
+```
+
+This allows future validation and debugging.
+
+## Migration from Old Version
+
+If you were using the plugin before this feature:
+1. Your existing collection is named `zotero_lib` (no model suffix)
+2. It likely uses `bge-base` embeddings (default)
+3. When you first run with the new version, a new collection `zotero_lib_bge-base` will be created
+4. You may want to delete the old `zotero_lib` collection to save space
+5. Or run a full reindex to populate the new model-specific collection
+
+## Future Enhancements
+
+Potential improvements:
+- Automatic migration of old `zotero_lib` collection
+- UI showing which models are indexed
+- Bulk delete of unused collections
+- Collection export/import for sharing embeddings

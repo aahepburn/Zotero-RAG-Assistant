@@ -5,6 +5,7 @@ import { apiFetch } from '../api/client';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import ProfileSelector from '../components/profile/ProfileSelector';
+import { useProfile } from '../contexts/ProfileContext';
 import { useAppUpdater } from '../hooks/useAppUpdater';
 import { isElectron } from '../utils/electron';
 import '../styles/settings.css';
@@ -12,6 +13,7 @@ import '../styles/settings.css';
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const { settings, updateSettings, loading, availableProviders } = useSettings();
+  const { profiles, activeProfile, deleteProfile } = useProfile();
   const [formData, setFormData] = useState(settings);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -70,7 +72,7 @@ const Settings: React.FC = () => {
   const loadModelsForProvider = async (providerId: string) => {
     setLoadingModels(prev => ({ ...prev, [providerId]: true }));
     try {
-      const response = await apiFetch(`/providers/${providerId}/models`);
+      const response = await apiFetch(`/api/providers/${providerId}/models`);
       if (response.ok) {
         const data = await response.json();
         setAvailableModels(prev => ({ ...prev, [providerId]: data.models || [] }));
@@ -85,7 +87,7 @@ const Settings: React.FC = () => {
   const validateProvider = async (providerId: string) => {
     setValidatingProvider(providerId);
     try {
-      const response = await apiFetch(`/providers/${providerId}/validate`, {
+      const response = await apiFetch(`/api/providers/${providerId}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -203,7 +205,7 @@ const Settings: React.FC = () => {
                 
                 {updater.status === 'not-available' && (
                   <div className="update-message up-to-date">
-                    ✓ You're running the latest version
+                     You're running the latest version
                   </div>
                 )}
                 
@@ -245,7 +247,7 @@ const Settings: React.FC = () => {
                 
                 {updater.status === 'downloaded' && updater.updateInfo && (
                   <div className="update-message downloaded">
-                    <strong>✓ Update Ready to Install</strong>
+                    <strong> Update Ready to Install</strong>
                     <p>Version {updater.updateInfo.version} has been downloaded and is ready to install.</p>
                     <p className="install-note">
                       The application will restart to complete the installation.
@@ -264,7 +266,6 @@ const Settings: React.FC = () => {
                 {(updater.status === 'idle' || updater.status === 'not-available' || updater.status === 'error') && (
                   <Button
                     onClick={updater.checkForUpdates}
-                    disabled={updater.status === 'checking'}
                     variant="secondary"
                   >
                     Check for Updates
@@ -274,7 +275,6 @@ const Settings: React.FC = () => {
                 {updater.status === 'available' && (
                   <Button
                     onClick={updater.downloadUpdate}
-                    disabled={updater.status === 'downloading'}
                     variant="primary"
                   >
                     Download Update
@@ -298,6 +298,16 @@ const Settings: React.FC = () => {
           <h2 className="settings-section-title">Active Model</h2>
           <p className="settings-section-description">
             Select your default LLM provider and model for chat interactions.
+          </p>
+          <p className="settings-note" style={{ 
+            padding: '12px', 
+            backgroundColor: 'var(--bg-hover, #f8f9fa)', 
+            borderLeft: '3px solid var(--accent, #007bff)', 
+            marginBottom: '16px',
+            fontSize: '14px',
+            color: 'var(--text-muted)'
+          }}>
+            <strong>Note:</strong> Only local Ollama models have been thoroughly tested. External API providers may have limited compatibility.
           </p>
 
           <div className="settings-field">
@@ -333,7 +343,7 @@ const Settings: React.FC = () => {
               <option value="">Default model</option>
               {availableModels[formData.activeProviderId]?.map(model => (
                 <option key={model.id} value={model.id}>
-                  {model.name} {model.description && `- ${model.description}`}
+                  {model.id}{model.description && ` - ${model.description}`}
                 </option>
               ))}
             </select>
@@ -373,7 +383,7 @@ const Settings: React.FC = () => {
               </option>
             </select>
             <p className="settings-hint settings-warning">
-              ⚠️ Changing the embedding model requires re-indexing your library. The new model will be used for new documents and queries, but existing embeddings will remain incompatible until you re-index.
+               Changing the embedding model requires re-indexing your library. The new model will be used for new documents and queries, but existing embeddings will remain incompatible until you re-index.
             </p>
           </div>
         </section>
@@ -402,7 +412,7 @@ const Settings: React.FC = () => {
                   </label>
                   {validation && (
                     <span className={`provider-status ${validation.valid ? 'valid' : 'invalid'}`}>
-                      {validation.valid ? '✓ Connected' : '✗ ' + validation.message}
+                      {validation.valid ? ' Connected' : ' ' + validation.message}
                     </span>
                   )}
                 </div>

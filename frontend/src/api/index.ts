@@ -6,13 +6,13 @@ export type IndexStatus = {
 };
 
 export async function indexLibrary(): Promise<{ msg?: string }>{
-  return request("/index_library", { method: "POST" });
+  return request("/api/index_library", { method: "POST" });
 }
 
 export async function getIndexStatus(): Promise<IndexStatus> {
-  return request("/index_status");
+  return request("/api/index_status");
 }
 
 export async function cancelIndexing(): Promise<{ msg?: string }>{
-  return request("/index_cancel", { method: "POST" });
+  return request("/api/index_cancel", { method: "POST" });
 }

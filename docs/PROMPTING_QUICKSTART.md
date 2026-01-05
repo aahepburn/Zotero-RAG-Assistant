@@ -3,19 +3,19 @@
 ## What Changed?
 
 Your Zotero RAG Assistant now uses **2025 best practices** for academic question answering, including:
-- ✅ Better citation accuracy (every claim is cited)
-- ✅ Clearer distinction between facts and analysis
-- ✅ Improved handling of uncertainty
-- ✅ Reduced repetition in responses
-- ✅ More natural academic writing
+-  Better citation accuracy (every claim is cited)
+-  Clearer distinction between facts and analysis
+-  Improved handling of uncertainty
+-  Reduced repetition in responses
+-  More natural academic writing
 
 ## No Action Required
 
 The system automatically uses the new prompts. You don't need to:
-- ❌ Reconfigure settings
-- ❌ Re-index your library
-- ❌ Change API keys
-- ❌ Update your queries
+-  Reconfigure settings
+-  Re-index your library
+-  Change API keys
+-  Update your queries
 
 ## What You'll Notice
 

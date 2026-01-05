@@ -163,9 +163,9 @@ git push origin v0.1.0
 ```markdown
 ## What's New
 
-- ✨ Feature: Added XYZ capability
-- 🐛 Fix: Resolved issue with ABC
-- ⚡ Performance: Improved indexing speed by 50%
+-  Feature: Added XYZ capability
+-  Fix: Resolved issue with ABC
+-  Performance: Improved indexing speed by 50%
 
 ## Installation
 

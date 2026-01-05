@@ -2,7 +2,15 @@
 
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import numpy as np
+import os
 from typing import Optional
+from pathlib import Path
+
+# Set persistent cache directory for sentence-transformers models
+# This prevents re-downloading models on every startup
+MODELS_CACHE_DIR = os.path.expanduser("~/.cache/sentence_transformers")
+Path(MODELS_CACHE_DIR).mkdir(parents=True, exist_ok=True)
+os.environ['SENTENCE_TRANSFORMERS_HOME'] = MODELS_CACHE_DIR
 
 # Available embedding models with different speed/quality tradeoffs
 EMBEDDING_MODELS = {
@@ -66,17 +74,17 @@ def load_embedding_model(model_id: str = None) -> SentenceTransformer:
     if _current_model is not None and _current_model_id == target_model_id:
         return _current_model
     
-    # Load new model
+    # Load new model with explicit cache directory
     config = get_model_config(target_model_id)
     print(f"Loading embedding model: {config['name']} ({config['description']})")
-    _current_model = SentenceTransformer(config['name'])
+    _current_model = SentenceTransformer(config['name'], cache_folder=MODELS_CACHE_DIR)
     _current_model_id = target_model_id
     
     return _current_model
 
 # Cross-encoder for re-ranking retrieved passages
 # This is much more accurate than cosine similarity for relevance scoring
-reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', cache_folder=MODELS_CACHE_DIR)
 
 def get_embedding(text: str, model_id: str = None) -> np.ndarray:
     """Generate embeddings for semantic search.

@@ -18,6 +18,8 @@ export interface Snippet {
   page?: number | string;
   zoteroKey?: string;
   pdf_path?: string;
+  confidence?: number; // Relevance score (0-1)
+  context?: string; // Full paragraph containing the snippet
 }
 
 export interface ChatResponse {

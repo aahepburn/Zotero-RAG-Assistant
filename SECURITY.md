@@ -27,13 +27,13 @@ The following sensitive files and directories are excluded from version control 
 ### Profile Directory Structure
 ```
 ~/.zotero-llm/
-├── active_profile.json          # Current active profile
-└── profiles/
-    └── default/                 # Profile ID
-        ├── profile.json         # Profile metadata
-        ├── settings.json        # Settings with API keys
-        ├── sessions.json        # Chat history
-        └── chroma/             # Vector database
+ active_profile.json          # Current active profile
+ profiles/
+     default/                 # Profile ID
+         profile.json         # Profile metadata
+         settings.json        # Settings with API keys
+         sessions.json        # Chat history
+         chroma/             # Vector database
 ```
 
 ### What's Stored Where

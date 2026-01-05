@@ -2,6 +2,7 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import type { ChatMessage } from "../../types/domain";
 import { Spinner } from "../../components/ui/Spinner";
+import { useResponseSelection } from "../../contexts/ResponseSelectionContext";
 
 interface Props {
   messages: ChatMessage[];
@@ -151,6 +152,7 @@ function formatMessageWithCitations(content: string | undefined): React.ReactNod
 const ChatMessages: React.FC<Props> = ({ messages, loading }) => {
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const { selectedResponseId, setSelectedResponseId } = useResponseSelection();
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -181,6 +183,18 @@ const ChatMessages: React.FC<Props> = ({ messages, loading }) => {
           <div
             key={m.id}
             className={`message message--${m.role === "user" ? "user" : "assistant"}`}
+            data-response-id={m.role === "assistant" ? m.id : undefined}
+            onClick={() => {
+              if (m.role === "assistant") {
+                setSelectedResponseId(m.id);
+              }
+            }}
+            style={{
+              cursor: m.role === "assistant" ? "pointer" : "default",
+              background: m.role === "assistant" && selectedResponseId === m.id ? "var(--bg-selected, #f0f8ff)" : undefined,
+              borderLeft: m.role === "assistant" && selectedResponseId === m.id ? "3px solid var(--accent)" : undefined,
+              transition: "background 0.2s ease, border-left 0.2s ease"
+            }}
           >
             <div className="message__avatar">
               {m.role === "user" ? (

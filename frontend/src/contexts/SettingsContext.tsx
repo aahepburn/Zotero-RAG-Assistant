@@ -96,7 +96,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Load available providers from backend
   const loadProviders = async () => {
     try {
-      const response = await apiFetch('/providers');
+      const response = await apiFetch('/api/providers');
       if (response.ok) {
         const data = await response.json();
         setAvailableProviders(data.providers || []);
@@ -110,7 +110,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await apiFetch('/settings');
+        const response = await apiFetch('/api/settings');
         if (response.ok) {
           const text = await response.text();
           try {
@@ -153,7 +153,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       setError(null);
       const updatedSettings = { ...settings, ...newSettings };
       
-      const response = await apiFetch('/settings', {
+      const response = await apiFetch('/api/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +168,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       const result = await response.json();
       
       // After saving, reload settings to get the masked versions
-      const reloadResponse = await apiFetch('/settings');
+      const reloadResponse = await apiFetch('/api/settings');
       if (reloadResponse.ok) {
         const data = await reloadResponse.json();
         setSettings(data);

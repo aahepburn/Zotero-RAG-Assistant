@@ -8,7 +8,8 @@
  * - Manage application lifecycle (startup, shutdown, updates)
  */
 
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
+import type { OnHeadersReceivedListenerDetails, HeadersReceivedResponse } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -228,7 +229,7 @@ async function setupLinuxVenv(onProgress?: (message: string, progress?: number) 
       console.log(`✓ Linux venv valid with all dependencies at: ${venvPath}`);
       return { pythonPath: pythonBin, venvPath };
     } else {
-      console.warn('⚠ Existing venv missing dependencies (uvicorn not found)');
+      console.warn('WARNING: Existing venv missing dependencies (uvicorn not found)');
       console.log('Reinstalling dependencies...');
       
       // Try to repair by reinstalling dependencies
@@ -492,7 +493,7 @@ async function waitForBackend(maxRetries = 30, delayMs = 1000): Promise<boolean>
           console.log('✓ Backend is ready and healthy!');
           return true;
         } else if (healthData.status === 'degraded') {
-          console.warn('⚠ Backend is running but degraded:', healthData.components);
+          console.warn('WARNING: Backend is running but degraded:', healthData.components);
           // Still return true for degraded - app can function with warnings
           return true;
         } else {
@@ -1189,6 +1190,32 @@ app.on('ready', async () => {
   console.log(`  - User data path: ${app.getPath('userData')}`);
   console.log('================================================================================');
   
+  // Configure Content Security Policy
+  session.defaultSession.webRequest.onHeadersReceived(
+    (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            IS_DEV
+              ? // Development: Allow Vite dev server and HMR
+                "default-src 'self' http://localhost:5173 ws://localhost:5173; " +
+                "script-src 'self' http://localhost:5173 'unsafe-inline'; " +
+                "style-src 'self' http://localhost:5173 'unsafe-inline'; " +
+                "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://127.0.0.1:8000 http://localhost:8000; " +
+                "img-src 'self' data: http://localhost:5173;"
+              : // Production: Strict CSP
+                "default-src 'self'; " +
+                "script-src 'self'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "connect-src 'self' http://127.0.0.1:8000 http://localhost:8000; " +
+                "img-src 'self' data:;"
+          ]
+        }
+      });
+    }
+  );
+  
   // Generate auth token
   authToken = generateAuthToken();
   
@@ -1225,7 +1252,7 @@ app.on('ready', async () => {
     const backendReady = await waitForBackend(30, 1000);
     
     if (!backendReady) {
-      console.warn('⚠ Backend not detected - make sure "npm run dev:backend" is running');
+      console.warn('WARNING: Backend not detected - make sure "npm run dev:backend" is running');
       const response = await dialog.showMessageBox({
         type: 'warning',
         title: 'Backend Not Detected',

@@ -82,13 +82,15 @@ Download the latest installer from [Releases](https://github.com/aahepburn/Zoter
 
 **System Requirements:** macOS 10.13 (High Sierra) or later
 
-#### Windows - (Not tested yet)
+#### Windows
 1. Download `Zotero-RAG-Assistant-{version}-win-x64.exe`
-2. Run the installer (may show SmartScreen warning on first run)
+2. Run the installer (may show SmartScreen warning on first run - click "More info" then "Run anyway")
 3. Choose installation location (default: `C:\Users\{username}\AppData\Local\Programs\`)
 4. Launch from Start Menu or desktop shortcut
 
 **System Requirements:** Windows 10 or later (64-bit)
+
+**Note:** Windows builds are now available but may show SmartScreen warnings since the app is not code-signed. See [docs/WINDOWS_BUILD_GUIDE.md](docs/WINDOWS_BUILD_GUIDE.md) for build instructions and troubleshooting.
 
 #### Linux
 
@@ -197,23 +199,16 @@ npm run package:all      # All platforms
 
 Built packages appear in the `release/` directory.
 
-See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for more details on the build process.
+For complete build instructions, see [docs/BUILD_CHECKLIST.md](docs/BUILD_CHECKLIST.md).
 
 ## Documentation
 
-**For Users:**
-- [Linux Installation Guide](docs/LINUX_PACKAGING.md) - Detailed Linux setup and troubleshooting
+** [Complete Documentation Index](docs/README.md)**
 
-**For Developers:**
-- [Desktop App Development](docs/DESKTOP_APP.md) - Development setup and workflow
-- [Building Releases](docs/PYINSTALLER_BUNDLE_GUIDE.md) - Creating distribution packages
-- [Release Process](docs/RELEASE_PROCESS.md) - Publishing new versions
-
-**Technical Reference:**
-- [API Endpoints](docs/api_endpoints.md) - Backend API documentation
-- [Profile System](docs/profile_system_guide.md) - Multi-profile architecture
-- [Provider System](docs/PROVIDER_QUICKSTART.md) - Adding LLM providers
-- [RAG Implementation](docs/rag_improvements.md) - Retrieval system details
+**Quick Links:**
+- **Users:** [Prompting Guide](docs/PROMPTING_QUICKSTART.md) · [Provider Setup](docs/provider_guide.md)
+- **Developers:** [Build Checklist](docs/BUILD_CHECKLIST.md) · [Desktop App Guide](docs/DESKTOP_APP.md)
+- **Platform-Specific:** [Windows Build](docs/WINDOWS_BUILD_GUIDE.md) · [Linux Packaging](docs/LINUX_PACKAGING.md)
 
 ## License
 

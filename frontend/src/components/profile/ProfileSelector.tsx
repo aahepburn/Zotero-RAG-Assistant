@@ -13,12 +13,14 @@ const ProfileSelector: React.FC<ProfileSelectorProps> = ({ className = '' }) => 
     activeProfile,
     isLoading,
     switchProfile,
-    createProfile
+    createProfile,
+    deleteProfile
   } = useProfile();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSwitchProfile = async (profileId: string) => {
     if (profileId === activeProfileId) return;
@@ -29,6 +31,44 @@ const ProfileSelector: React.FC<ProfileSelectorProps> = ({ className = '' }) => 
     
     if (confirmed) {
       await switchProfile(profileId);
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!activeProfileId || !activeProfile) return;
+    
+    if (profiles.length <= 1) {
+      alert('Cannot delete the last profile. At least one profile must exist.');
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the profile "${activeProfile.name}"? This will delete all associated data including chat sessions and vector database. This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    const confirmAgain = window.confirm(
+      'This is your last warning. All data in this profile will be permanently deleted. Are you absolutely sure?'
+    );
+    
+    if (!confirmAgain) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      const success = await deleteProfile(activeProfileId, true);
+      if (success) {
+        // Profile deletion will trigger app reload, so no need for additional actions
+        alert('Profile deleted successfully. The application will now reload.');
+      } else {
+        alert('Failed to delete profile. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting profile:', error);
+      alert('An error occurred while deleting the profile.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -89,6 +129,17 @@ const ProfileSelector: React.FC<ProfileSelectorProps> = ({ className = '' }) => 
         >
           {showCreateForm ? 'Cancel' : '+ New'}
         </Button>
+        {profiles.length > 1 && activeProfileId && (
+          <Button
+            onClick={handleDeleteProfile}
+            variant="secondary"
+            className="btn-sm btn-danger"
+            disabled={isDeleting}
+            title="Delete current profile"
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        )}
       </div>
 
       {showCreateForm && (
@@ -185,6 +236,15 @@ const ProfileSelector: React.FC<ProfileSelectorProps> = ({ className = '' }) => 
 
         .text-muted {
           color: var(--text-secondary);
+        }
+
+        .btn-danger {
+          color: #dc3545;
+        }
+
+        .btn-danger:hover {
+          background: rgba(220, 53, 69, 0.1);
+          border-color: #dc3545;
         }
       `}</style>
     </div>

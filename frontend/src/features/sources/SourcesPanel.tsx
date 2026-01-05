@@ -1,59 +1,49 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSessions } from "../../contexts/SessionsContext";
-import { useChatContext } from "../../contexts/ChatContext";
+import { useResponseSelection } from "../../contexts/ResponseSelectionContext";
 import { apiFetch } from "../../api/client";
+import type { Source } from "../../types/session";
 
-function buildZoteroSelectUri(itemKey?: string | number | null, groupId?: string | number | null) {
-  if (!itemKey) return null;
-  const key = encodeURIComponent(String(itemKey));
-  if (groupId) {
-    return `zotero://select/groups/${encodeURIComponent(String(groupId))}/items/${key}`;
-  }
-  return `zotero://select/library/items/${key}`;
-}
-
-function buildZoteroOpenPdfUri(itemKey?: string | number | null, page?: number | string | null, groupId?: string | number | null) {
-  if (!itemKey) return null;
-  const key = encodeURIComponent(String(itemKey));
-  // Zotero 7 expects the newer form with /library/
-  let uri = `zotero://open-pdf/library/items/${key}`;
-  const params: string[] = [];
-  if (page != null && String(page).trim() !== "") params.push(`page=${encodeURIComponent(String(page))}`);
-  if (params.length) uri += `?${params.join("&")}`;
-  return uri;
-}
-
-function tryOpenUri(uri: string | null) {
-  if (!uri) return false;
-  try {
-    // Use location assign so the browser hands it off to the OS handler
-    window.location.href = uri;
-    return true;
-  } catch (e) {
-    try {
-      window.open(uri, "_blank");
-      return true;
-    } catch (e2) {
-      console.warn("Failed to open uri", uri, e2);
-      return false;
-    }
-  }
-}
-
+/**
+ * SourcesPanel displays sources specific to the currently selected response.
+ * Sources are sorted by confidence (highest first) and include metadata like
+ * relevance score, author, and page numbers.
+ */
 const SourcesPanel: React.FC = () => {
   const { currentSessionId, getSession, rightCollapsed, toggleRight } = useSessions();
+  const { selectedResponseId } = useResponseSelection();
   const session = currentSessionId ? getSession(currentSessionId) : null;
-  const chat = useChatContext();
-  const [searchResults, setSearchResults] = useState<Record<string, any[]>>({});
-  const [searchLoading, setSearchLoading] = useState<Record<string, boolean>>({});
-  const [showDebug, setShowDebug] = useState(false);
+  const [sources, setSources] = useState<Source[]>([]);
+
+  // Update sources when selected response changes
+  useEffect(() => {
+    if (!session || !selectedResponseId) {
+      setSources([]);
+      return;
+    }
+
+    // Find the selected message
+    const selectedMessage = session.messages.find(m => m.id === selectedResponseId);
+    console.log("SourcesPanel: selectedMessage", selectedMessage);
+    console.log("SourcesPanel: selectedMessage.sources", selectedMessage?.sources);
+    
+    if (selectedMessage && selectedMessage.role === "assistant" && selectedMessage.sources) {
+      // Sort by confidence (highest first)
+      const sortedSources = [...selectedMessage.sources].sort((a, b) => b.confidence - a.confidence);
+      setSources(sortedSources);
+      console.log("SourcesPanel: Setting sources", sortedSources);
+    } else {
+      setSources([]);
+      console.log("SourcesPanel: No sources found for message");
+    }
+  }, [session, selectedResponseId]);
 
   if (!session) {
     return (
       <>
         <header>
           <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Sources</div>
-          <div className="muted">Cited items and snippets.</div>
+          <div className="muted">Cited sources for selected response.</div>
         </header>
         <main>
           <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
@@ -69,12 +59,54 @@ const SourcesPanel: React.FC = () => {
     );
   }
 
+  if (!selectedResponseId) {
+    return (
+      <>
+        <header>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Sources</div>
+          <div className="muted">Select a response to view sources.</div>
+        </header>
+        <main>
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ margin: "0 auto 16px", opacity: 0.3 }}>
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>No Response Selected</div>
+            <div style={{ fontSize: "13px" }}>Click on an assistant response to view its sources.</div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (sources.length === 0) {
+    return (
+      <>
+        <header>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Sources</div>
+          <div className="muted">No sources for this response.</div>
+        </header>
+        <main>
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ margin: "0 auto 16px", opacity: 0.3 }}>
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>No Sources</div>
+            <div style={{ fontSize: "13px" }}>This response has no source citations.</div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontFamily: "var(--font-serif)", fontSize: "20px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "0.02em", marginBottom: "4px" }}>Sources</div>
-          <div className="muted">Cited items and snippets for this session</div>
+          <div className="muted">Showing {sources.length} source{sources.length !== 1 ? 's' : ''} (sorted by relevance)</div>
         </div>
         <div>
           <button className="btn" onClick={toggleRight} title={rightCollapsed ? "Show sources" : "Hide sources"}>
@@ -85,20 +117,14 @@ const SourcesPanel: React.FC = () => {
         </div>
       </header>
       <main>
-        <div style={{ marginBottom: 8 }} className="muted">Showing sources for this session.</div>
-
         <div style={{ marginTop: 8 }}>
-          {session.sources.length === 0 && <div className="muted">No sources yet in session; checking latest response...</div>}
-          {session.sources.length === 0 && (chat?.lastResponse?.citations ?? []).length > 0 && (
-            <div style={{ marginBottom: 8 }} className="muted">Showing sources from latest response (session not populated)</div>
-          )}
-          {(session.sources.length > 0 ? session.sources : (chat?.lastResponse?.citations ?? []).map((c: any) => ({ id: String(c.id), title: c.title, authors: c.authors, year: c.year ? String(c.year) : undefined, zoteroKey: c.zoteroKey, localPdfPath: c.pdf_path }))).map((s: any, index: number) => (
-            <div key={s.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          {sources.map((source, index) => (
+            <div key={source.documentId} style={{ borderBottom: "1px solid var(--border-subtle)", marginBottom: "8px" }}>
               {/* Top section: metadata */}
               <div style={{ padding: 12, display: "flex", alignItems: "flex-start", gap: "12px" }}>
                 <div style={{ 
-                  minWidth: "28px", 
-                  height: "28px", 
+                  minWidth: "32px", 
+                  height: "32px", 
                   borderRadius: "50%", 
                   background: "var(--accent)", 
                   color: "white", 
@@ -109,13 +135,24 @@ const SourcesPanel: React.FC = () => {
                   fontWeight: 600,
                   flexShrink: 0
                 }}>
-                  {s.id || index + 1}
+                  {index + 1}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{s.title}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {s.authors ? s.authors.split(",")[0].trim() + (s.authors.split(",").length > 1 ? " et al." : "") : "Unknown author"}
-                    {s.year ? ` • ${s.year}` : ""}
+                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{source.title}</div>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: "6px" }}>
+                    {source.author || "Unknown author"}
+                    {source.pageNumber ? ` • Page ${source.pageNumber}` : ""}
+                  </div>
+                  <div style={{ 
+                    display: "inline-block", 
+                    background: source.confidence >= 0.9 ? "#e8f5e9" : source.confidence >= 0.8 ? "#fff3e0" : "#fce4ec",
+                    color: source.confidence >= 0.9 ? "#2e7d32" : source.confidence >= 0.8 ? "#e65100" : "#c2185b",
+                    padding: "2px 8px", 
+                    borderRadius: "12px", 
+                    fontSize: "11px",
+                    fontWeight: 600
+                  }}>
+                    {(source.confidence * 100).toFixed(0)}% relevance
                   </div>
                 </div>
               </div>
@@ -125,12 +162,11 @@ const SourcesPanel: React.FC = () => {
                   className="btn"
                   title="Open PDF"
                   onClick={async () => {
-                    // Open PDF via backend endpoint that uses system default viewer
-                    if (s.localPdfPath) {
-                      const fp = String(s.localPdfPath);
+                    if (source.localPdfPath) {
+                      const fp = String(source.localPdfPath);
                       console.log("Opening PDF:", fp);
                       try {
-                        const resp = await apiFetch("/open_pdf", {
+                        const resp = await apiFetch("/api/open_pdf", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ pdf_path: fp }),
@@ -154,85 +190,28 @@ const SourcesPanel: React.FC = () => {
                   </svg>
                 </button>
 
-                <a title="Google Scholar" className="btn" href={`https://scholar.google.com/scholar?q=${encodeURIComponent(s.title)}`} target="_blank" rel="noreferrer">
+                <a title="Google Scholar" className="btn" href={`https://scholar.google.com/scholar?q=${encodeURIComponent(source.title)}`} target="_blank" rel="noreferrer">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M7.5 4.21l4.5 2.6 4.5-2.6M12 22v-10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </a>
                 
-                <a title="Google Books" className="btn" href={`https://www.google.com/search?tbm=bks&q=${encodeURIComponent(s.title)}`} target="_blank" rel="noreferrer">
+                <a title="Google Books" className="btn" href={`https://www.google.com/search?tbm=bks&q=${encodeURIComponent(source.title)}`} target="_blank" rel="noreferrer">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </a>
+                
+                {source.snippets && source.snippets.length > 0 && (
+                  <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
+                    {source.snippets.length} snippet{source.snippets.length !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
             </div>
           ))}
-          {/* Inline search results popovers */}
-          {session.sources.map((s) => {
-            const results = searchResults[s.id] ?? null;
-            if (!results) return null;
-            return (
-              <div key={`search-${s.id}`} style={{ padding: 8, borderBottom: "1px solid var(--border-subtle)", background: "rgba(0,0,0,0.02)" }}>
-                <div style={{ fontSize: 13, marginBottom: 8 }}><strong>Search results for “{s.title}”</strong></div>
-                {searchLoading[s.id] && <div className="muted">Searching…</div>}
-                {!searchLoading[s.id] && results.length === 0 && <div className="muted">No matches found.</div>}
-                {!searchLoading[s.id] && results.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {results.map((r: any) => (
-                      <div key={r.id ?? r.key ?? JSON.stringify(r)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600 }}>{r.title ?? r.itemTitle ?? "(no title)"}</div>
-                          <div className="muted" style={{ fontSize: 12 }}>{r.author ?? r.creators ?? ''} {r.date ? ` • ${r.date}` : ''}</div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className='btn' title="Open PDF" onClick={async () => {
-                            const key = r.key ?? r.zoteroKey ?? null;
-                            const page = r.page ?? null;
-                            const groupId = r.groupID ?? r.groupId ?? r.group?.id ?? null;
-                            const zuri = buildZoteroOpenPdfUri(key, page, groupId);
-                            console.log('openPdfUri (result)', zuri);
-                            if (zuri) {
-                              if (tryOpenUri(zuri)) return;
-                            }
-                            const fp = r.pdf_path ?? r.filePath ?? null;
-                            if (fp) {
-                              console.log('Opening PDF:', fp);
-                              try {
-                                const resp = await apiFetch('/open_pdf', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ pdf_path: fp }),
-                                });
-                                const data = await resp.json();
-                                if (data.error) {
-                                  alert(`Failed to open PDF: ${data.error}`);
-                                }
-                              } catch (e) {
-                                console.error('Failed to open PDF:', e);
-                                alert('Failed to open PDF. Check console for details.');
-                              }
-                            } else {
-                              alert('No PDF path available for this result');
-                            }
-                          }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              <path d="M14 2v6h6M9 13h6M9 17h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-
         </div>
       </main>
     </>

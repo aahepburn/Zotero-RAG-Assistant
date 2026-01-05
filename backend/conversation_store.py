@@ -125,21 +125,34 @@ class ConversationStore:
         
         # If already within limits, return as-is
         total_chars = sum(len(m.content) for m in messages)
+        print(f"[ConversationStore] trim_messages: input={len(messages)} msgs, {total_chars} chars")
+        print(f"[ConversationStore] limits: max_messages={max_messages}, max_chars={max_chars}")
         if len(conversation_messages) <= max_messages and total_chars <= max_chars:
+            print(f"[ConversationStore] Within limits, returning all {len(messages)} messages")
             return messages
         
         # Keep most recent messages within limits
         kept_messages = []
         char_count = len(system_message.content) if system_message else 0
         
+        # For follow-up turns (>1 conversation message), we MUST keep at least the current message
+        # even if it puts us over the limit, otherwise the model has zero context
+        min_messages_to_keep = 1 if len(conversation_messages) > 1 else 0
+        
         # Work backwards from most recent
-        for msg in reversed(conversation_messages):
+        for i, msg in enumerate(reversed(conversation_messages)):
             msg_chars = len(msg.content)
-            if (len(kept_messages) < max_messages and 
-                char_count + msg_chars <= max_chars):
+            within_message_limit = len(kept_messages) < max_messages
+            within_char_limit = char_count + msg_chars <= max_chars
+            must_keep = i < min_messages_to_keep  # Keep at least most recent message
+            
+            if (within_message_limit and within_char_limit) or must_keep:
                 kept_messages.insert(0, msg)
                 char_count += msg_chars
+                if must_keep and not within_char_limit:
+                    print(f"[ConversationStore] Keeping message {i} even though it exceeds char limit (required for context)")
             else:
+                print(f"[ConversationStore] Stopped at {len(kept_messages)} kept (would exceed limits)")
                 break
         
         # Reconstruct with system message first
@@ -147,6 +160,8 @@ class ConversationStore:
         if system_message:
             result.append(system_message)
         result.extend(kept_messages)
+        
+        print(f"[ConversationStore] Returning {len(result)} messages after trimming")
         
         return result
     

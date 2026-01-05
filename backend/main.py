@@ -13,7 +13,12 @@ from backend.embed_utils import get_embedding
 from backend.profile_manager import ProfileManager
 import os
 import json
+import warnings
 from pathlib import Path
+
+# Suppress resource_tracker warnings from loky/scikit-learn
+# These are harmless cleanup warnings from parallel processing in sentence-transformers
+warnings.filterwarnings("ignore", category=UserWarning, module="resource_tracker")
 
 app = FastAPI()
 
@@ -52,7 +57,8 @@ app.add_middleware(
 # Default paths - use user's home directory for cross-platform compatibility
 _home = Path.home()
 DB_PATH = str(_home / "Zotero" / "zotero.sqlite")
-CHROMA_PATH = str(_home / ".zotero-llm" / "chroma" / "user-1")
+# CHROMA_PATH is now profile-specific - set per profile in load_settings()
+CHROMA_PATH = None  # Legacy global, prefer profile-specific paths
 
 
 def load_settings(profile_id: str = None):
@@ -67,12 +73,15 @@ def load_settings(profile_id: str = None):
             raise RuntimeError("No active profile")
         profile_id = active['id']
     
+    # Use profile-specific chroma path by default
+    profile_chroma_path = profile_manager.get_profile_chroma_path(profile_id)
+    
     default_settings = {
         "activeProviderId": "ollama",
         "activeModel": "",
         "embeddingModel": "bge-base",
         "zoteroPath": DB_PATH,
-        "chromaPath": CHROMA_PATH,
+        "chromaPath": profile_chroma_path,
         "providers": {
             "ollama": {
                 "enabled": True,
@@ -234,6 +243,11 @@ def read_root_head():
     return {"msg": "Welcome to Zotero LLM Plugin backend"}
 
 @app.get("/health")
+def health_check_simple():
+    """Simple health check endpoint for application startup verification."""
+    return {"status": "healthy"}
+
+@app.get("/api/health")
 def health_check():
     """
     Detailed health check endpoint that validates all critical components.
@@ -286,7 +300,7 @@ def health_check():
             "timestamp": __import__("datetime").datetime.now().isoformat()
         }
 
-@app.get("/pdfsample")
+@app.get("/api/pdfsample")
 def pdf_sample(
     filename: str = Query(..., description="Path to PDF file, e.g. backend/sample_pdfs/test_article.pdf"),
     max_chars: Optional[int] = Query(2000, description="Maximum number of characters to extract"),
@@ -299,7 +313,7 @@ def pdf_sample(
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/item_metadata")
+@app.get("/api/item_metadata")
 def get_item_metadata(
     filename: str = Query(..., description="Path to PDF or metadata file"),
 ):
@@ -313,7 +327,7 @@ def get_item_metadata(
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/search_items")
+@app.get("/api/search_items")
 def search_items(
     authors: Optional[str] = Query("", description="Comma separated authors"),
     titles: Optional[str] = Query("", description="Comma separated titles"),
@@ -331,7 +345,7 @@ def search_items(
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/get_gbook_reviews")
+@app.get("/api/get_gbook_reviews")
 def get_reviews(query: str):
     """Makes a call to the Google Books API to retrieve reviews."""
     try:
@@ -340,7 +354,7 @@ def get_reviews(query: str):
     except Exception as e:
         return {"error": str(e)}
 
-@app.post("/index_library")
+@app.post("/api/index_library")
 def index_library(payload: dict = Body(default={"incremental": True})):
     """Index Zotero parent items and PDFs in the vector database.
     
@@ -358,7 +372,7 @@ def index_library(payload: dict = Body(default={"incremental": True})):
         return {"error": str(e)}
 
 
-@app.post("/index_cancel")
+@app.post("/api/index_cancel")
 def index_cancel():
     """Cancel a running indexing job."""
     try:
@@ -369,7 +383,7 @@ def index_cancel():
 
 import traceback
 
-@app.get("/chat")
+@app.get("/api/chat")
 def chat(query: str, item_ids: Optional[str] = Query("", description="Comma separated Zotero item IDs to scope search")):
     try:
         filter_ids = [id_.strip() for id_ in item_ids.split(",") if id_.strip()]
@@ -380,7 +394,7 @@ def chat(query: str, item_ids: Optional[str] = Query("", description="Comma sepa
         return {"error": str(e), "traceback": tb}
 
 
-@app.post("/chat")
+@app.post("/api/chat")
 def chat_post(payload: dict = Body(...)):
     """POST-style chat endpoint that accepts JSON body: {"query": "...", "item_ids": ["id1","id2"], "session_id": "..."}
     This mirrors the GET `/chat` endpoint but is easier for clients that send JSON.
@@ -419,7 +433,7 @@ def chat_post(payload: dict = Body(...)):
                 "error": "Database configuration error: Embedding dimension mismatch detected. "
                         "This usually means your database was created with a different embedding model. "
                         "Please delete the vector database and re-index your library. "
-                        "Run: rm -rf " + CHROMA_PATH + " then use the Index Library button.",
+                        "Run: rm -rf <your_chroma_path> then use the Index Library button.",
                 "technical_details": error_msg,
                 "traceback": traceback.format_exc()
             }
@@ -428,7 +442,7 @@ def chat_post(payload: dict = Body(...)):
         return {"error": error_msg, "traceback": tb}
 
 
-@app.get("/index_status")
+@app.get("/api/index_status")
 def index_status():
     """Return a simple status for indexing. Currently basic placeholder.
     You can expand this to report real progress/state from the ZoteroChatbot.
@@ -441,7 +455,7 @@ def index_status():
         return {"error": str(e)}
 
 
-@app.get("/db_health")
+@app.get("/api/db_health")
 def db_health():
     """Check the health and configuration of the vector database.
     Validates that embedding dimensions are consistent.
@@ -453,7 +467,7 @@ def db_health():
         return {"status": "error", "error": str(e)}
 
 
-@app.get("/index_stats")
+@app.get("/api/index_stats")
 def index_stats():
     """Get statistics about the indexed library.
     
@@ -490,7 +504,7 @@ def index_stats():
         return {"error": str(e)}
 
 
-@app.get("/diagnose_unindexed")
+@app.get("/api/diagnose_unindexed")
 def diagnose_unindexed():
     """Diagnose why specific items aren't being indexed.
     
@@ -560,14 +574,17 @@ def diagnose_unindexed():
         return {"error": str(e), "traceback": traceback.format_exc()}
 
 
-@app.get("/embedding_collections")
+@app.get("/api/embedding_collections")
 def list_embedding_collections():
     """List all available embedding model collections in the database.
     Shows which embedding models have been used to index the library.
     """
     try:
         settings = load_settings()
-        chroma_path = settings.get("chromaPath", CHROMA_PATH)
+        # Use profile-specific chroma path
+        active = profile_manager.get_active_profile()
+        profile_chroma_path = profile_manager.get_profile_chroma_path(active['id'])
+        chroma_path = settings.get("chromaPath", profile_chroma_path)
         
         # Create a temporary ChromaDB client to list collections
         import chromadb
@@ -598,7 +615,7 @@ def list_embedding_collections():
         return {"error": str(e)}
 
 
-@app.post("/open_pdf")
+@app.post("/api/open_pdf")
 def open_pdf(payload: dict = Body(...)):
     """Open a PDF file with the system's default viewer.
     Expects JSON body: {"pdf_path": "/path/to/file.pdf"}
@@ -633,7 +650,7 @@ def open_pdf(payload: dict = Body(...)):
         return {"error": str(e)}
 
 
-@app.get("/ollama_status")
+@app.get("/api/ollama_status")
 def ollama_status():
     """Check if Ollama is running and responsive (deprecated - use /providers/ollama/status)."""
     import requests
@@ -656,7 +673,7 @@ def ollama_status():
         return {"status": "error", "message": str(e)}
 
 
-@app.get("/embedding_models")
+@app.get("/api/embedding_models")
 def list_embedding_models():
     """List all available embedding models."""
     from backend.embed_utils import EMBEDDING_MODELS
@@ -673,7 +690,7 @@ def list_embedding_models():
         return {"error": str(e)}
 
 
-@app.get("/providers")
+@app.get("/api/providers")
 def list_providers():
     """List all available LLM providers and their metadata."""
     from backend.model_providers import get_provider_info
@@ -684,7 +701,7 @@ def list_providers():
         return {"error": str(e)}
 
 
-@app.get("/providers/{provider_id}/models")
+@app.get("/api/providers/{provider_id}/models")
 def list_provider_models(provider_id: str):
     """List available models for a specific provider."""
     from backend.model_providers import get_provider
@@ -714,7 +731,7 @@ def list_provider_models(provider_id: str):
         return {"error": str(e)}
 
 
-@app.post("/providers/{provider_id}/validate")
+@app.post("/api/providers/{provider_id}/validate")
 def validate_provider(provider_id: str, credentials: dict = Body(...)):
     """Validate credentials for a specific provider."""
     from backend.model_providers import get_provider
@@ -743,7 +760,7 @@ def validate_provider(provider_id: str, credentials: dict = Body(...)):
             return {"valid": False, "error": error_msg}
 
 
-@app.get("/providers/{provider_id}/status")
+@app.get("/api/providers/{provider_id}/status")
 def provider_status(provider_id: str):
     """Check the status and availability of a specific provider."""
     from backend.model_providers import get_provider
@@ -788,7 +805,7 @@ def provider_status(provider_id: str):
         return {"status": "error", "error": str(e)}
 
 
-@app.get("/settings")
+@app.get("/api/settings")
 def get_settings():
     """Get current application settings."""
     try:
@@ -813,7 +830,7 @@ def get_settings():
         return {"error": str(e)}
 
 
-@app.get("/profiles")
+@app.get("/api/profiles")
 def list_profiles():
     """List all available profiles."""
     try:
@@ -827,7 +844,7 @@ def list_profiles():
         return {"error": str(e)}
 
 
-@app.post("/profiles")
+@app.post("/api/profiles")
 def create_profile(payload: dict = Body(...)):
     """Create a new profile.
     
@@ -849,7 +866,7 @@ def create_profile(payload: dict = Body(...)):
         return {"error": str(e)}
 
 
-@app.get("/profiles/{profile_id}")
+@app.get("/api/profiles/{profile_id}")
 def get_profile(profile_id: str):
     """Get metadata for a specific profile."""
     try:
@@ -861,7 +878,7 @@ def get_profile(profile_id: str):
         return {"error": str(e)}
 
 
-@app.put("/profiles/{profile_id}")
+@app.put("/api/profiles/{profile_id}")
 def update_profile(profile_id: str, payload: dict = Body(...)):
     """Update profile metadata.
     
@@ -880,7 +897,7 @@ def update_profile(profile_id: str, payload: dict = Body(...)):
         return {"error": str(e)}
 
 
-@app.delete("/profiles/{profile_id}")
+@app.delete("/api/profiles/{profile_id}")
 def delete_profile(profile_id: str, force: bool = Query(False)):
     """Delete a profile and all its data."""
     try:
@@ -894,7 +911,7 @@ def delete_profile(profile_id: str, force: bool = Query(False)):
         return {"error": str(e)}
 
 
-@app.post("/profiles/{profile_id}/activate")
+@app.post("/api/profiles/{profile_id}/activate")
 def activate_profile(profile_id: str):
     """Set the active profile."""
     try:
@@ -914,7 +931,7 @@ def activate_profile(profile_id: str):
         return {"error": str(e)}
 
 
-@app.get("/profiles/{profile_id}/sessions")
+@app.get("/api/profiles/{profile_id}/sessions")
 def get_profile_sessions(profile_id: str):
     """Get sessions for a specific profile."""
     try:
@@ -924,7 +941,7 @@ def get_profile_sessions(profile_id: str):
         return {"error": str(e)}
 
 
-@app.post("/profiles/{profile_id}/sessions")
+@app.post("/api/profiles/{profile_id}/sessions")
 def save_profile_sessions(profile_id: str, sessions_data: dict = Body(...)):
     """Save sessions for a specific profile."""
     try:
@@ -936,7 +953,7 @@ def save_profile_sessions(profile_id: str, sessions_data: dict = Body(...)):
         return {"error": str(e)}
 
 
-@app.post("/settings")
+@app.post("/api/settings")
 def update_settings(settings: dict = Body(...)):
     """Update application settings."""
     try:
@@ -983,11 +1000,9 @@ def update_settings(settings: dict = Body(...)):
         
         if save_settings(updated_settings):
             # Update global paths if they changed
-            global DB_PATH, CHROMA_PATH, chatbot
+            global DB_PATH, chatbot
             if "zoteroPath" in settings:
                 DB_PATH = settings["zoteroPath"]
-            if "chromaPath" in settings:
-                CHROMA_PATH = settings["chromaPath"]
             
             # Reinitialize chatbot with new provider or embedding settings
             if "activeProviderId" in settings or "activeModel" in settings or "embeddingModel" in settings:
@@ -1014,7 +1029,10 @@ def update_settings(settings: dict = Body(...)):
                             print(f"Creating new ChromaClient with collection: zotero_lib_{new_embedding_model}")
                             chatbot.embedding_model_id = new_embedding_model
                             # Reinitialize ChromaClient with new embedding model
-                            chroma_path = updated_settings.get("chromaPath", CHROMA_PATH)
+                            # Use profile-specific path if chromaPath not customized
+                            active = profile_manager.get_active_profile()
+                            profile_chroma_path = profile_manager.get_profile_chroma_path(active['id'])
+                            chroma_path = updated_settings.get("chromaPath", profile_chroma_path)
                             chatbot.chroma = ChromaClient(chroma_path, embedding_model_id=new_embedding_model)
                         else:
                             print(f"Embedding model unchanged: {chatbot.embedding_model_id}")

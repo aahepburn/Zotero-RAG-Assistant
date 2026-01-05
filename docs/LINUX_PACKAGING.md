@@ -2,18 +2,20 @@
 
 ## Overview
 
-The app now provides native `.deb` packages for Debian-based distributions (Ubuntu, Debian, Linux Mint, Pop!_OS, etc.) with proper Electron sandbox configuration. No `--no-sandbox` flags required!
+The app provides native `.deb` packages for Debian-based distributions (Ubuntu, Debian, Linux Mint, Pop!_OS, etc.) with proper Electron sandbox configuration. No `--no-sandbox` flags required!
+
+**Current Approach (v0.1.10+)**: Linux uses system Python + venv for a smaller package size (~250MB vs 2.5GB with PyInstaller bundle). The app automatically sets up and repairs the Python environment on first run.
 
 ## Package Types
 
 ### 1. Debian Package (`.deb`) - Recommended for Most Users
 
 **Benefits:**
-- ✅ Native system integration (package manager, menu entries, file associations)
-- ✅ Automatic updates via `apt upgrade` (when using APT repo)
-- ✅ Proper sandbox permissions set automatically
-- ✅ Clean uninstall with `apt remove`
-- ✅ Respects system conventions (`/opt` install location)
+-  Native system integration (package manager, menu entries, file associations)
+-  Automatic updates via `apt upgrade` (when using APT repo)
+-  Proper sandbox permissions set automatically
+-  Clean uninstall with `apt remove`
+-  Respects system conventions (`/opt` install location)
 
 **Installation:**
 ```bash
@@ -38,9 +40,9 @@ zotero-rag-assistant
 ### 2. AppImage - Portable Alternative
 
 **Benefits:**
-- ✅ No installation required
-- ✅ Run from anywhere (USB drive, Downloads folder, etc.)
-- ✅ No root/sudo needed
+-  No installation required
+-  Run from anywhere (USB drive, Downloads folder, etc.)
+-  No root/sudo needed
 
 **Usage:**
 ```bash

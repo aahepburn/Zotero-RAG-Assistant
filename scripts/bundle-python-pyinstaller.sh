@@ -11,7 +11,7 @@ BUNDLE_DIR="$PROJECT_ROOT/python-dist"
 BUILD_DIR="$PROJECT_ROOT/build-python"
 SPEC_FILE="$PROJECT_ROOT/backend_bundle.spec"
 
-echo "🐍 Creating standalone Python bundle with PyInstaller..."
+echo " Creating standalone Python bundle with PyInstaller..."
 echo "=================================================="
 
 # Detect platform
@@ -19,10 +19,10 @@ case "$(uname -s)" in
     Darwin*)    PLATFORM="darwin";;
     Linux*)     PLATFORM="linux";;
     MINGW*|MSYS*|CYGWIN*) PLATFORM="win32";;
-    *)          echo "❌ Unsupported platform"; exit 1;;
+    *)          echo " Unsupported platform"; exit 1;;
 esac
 
-echo "📦 Platform: $PLATFORM"
+echo " Platform: $PLATFORM"
 
 # Clean previous bundle and build artifacts
 if [ -d "$BUNDLE_DIR" ]; then
@@ -42,18 +42,18 @@ fi
 
 # Check for Python 3
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.8 or later."
+    echo " Python 3 is not installed. Please install Python 3.8 or later."
     exit 1
 fi
 
 PYTHON_CMD=$(command -v python3)
 PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
-echo "✓ Found Python $PYTHON_VERSION at $PYTHON_CMD"
+echo " Found Python $PYTHON_VERSION at $PYTHON_CMD"
 
 # Check if we have a virtual environment activated, or use system Python
 if [ -z "$VIRTUAL_ENV" ]; then
-    echo "⚠️  No virtual environment activated"
-    echo "📦 Creating temporary build environment..."
+    echo "  No virtual environment activated"
+    echo " Creating temporary build environment..."
     
     # Create temporary venv for building
     $PYTHON_CMD -m venv "$BUILD_DIR/venv"
@@ -66,30 +66,30 @@ if [ -z "$VIRTUAL_ENV" ]; then
         PIP_CMD="$BUILD_DIR/venv/bin/pip"
     fi
 else
-    echo "✓ Using active virtual environment: $VIRTUAL_ENV"
+    echo " Using active virtual environment: $VIRTUAL_ENV"
     PIP_CMD="pip"
 fi
 
 # Upgrade pip and install build tools
-echo "⬆️  Upgrading pip and installing build tools..."
+echo "  Upgrading pip and installing build tools..."
 $PIP_CMD install --upgrade pip setuptools wheel --quiet
 
 # Install PyInstaller
-echo "📦 Installing PyInstaller..."
+echo " Installing PyInstaller..."
 $PIP_CMD install pyinstaller --quiet
 
 # Install backend requirements (needed for PyInstaller to analyze dependencies)
-echo "📥 Installing backend dependencies (this may take a few minutes)..."
+echo " Installing backend dependencies (this may take a few minutes)..."
 $PIP_CMD install -r "$PROJECT_ROOT/requirements.txt" --quiet
 
 # Run PyInstaller
-echo "🔨 Building standalone bundle with PyInstaller..."
+echo " Building standalone bundle with PyInstaller..."
 echo "   This may take 5-10 minutes depending on your system..."
 pyinstaller --clean --noconfirm "$SPEC_FILE"
 
 # Move the bundle to python-dist
 if [ -d "$PROJECT_ROOT/dist/backend_bundle" ]; then
-    echo "📦 Moving bundle to python-dist..."
+    echo " Moving bundle to python-dist..."
     mv "$PROJECT_ROOT/dist/backend_bundle" "$BUNDLE_DIR"
     
     # Create a bin directory structure for compatibility with Electron app expectations
@@ -132,53 +132,53 @@ EOF
     # Get bundle size
     BUNDLE_SIZE=$(du -sh "$BUNDLE_DIR" | cut -f1)
     echo ""
-    echo "✅ PyInstaller bundle created successfully!"
-    echo "📊 Bundle size: $BUNDLE_SIZE"
-    echo "📍 Location: $BUNDLE_DIR"
+    echo " PyInstaller bundle created successfully!"
+    echo " Bundle size: $BUNDLE_SIZE"
+    echo " Location: $BUNDLE_DIR"
     echo ""
-    echo "📁 Bundle structure:"
+    echo " Bundle structure:"
     if [ "$PLATFORM" = "darwin" ] || [ "$PLATFORM" = "linux" ]; then
         ls -lh "$BUNDLE_DIR" | head -10
     fi
     echo ""
     
     # Verify the bundle
-    echo "🔍 Verifying bundle..."
+    echo " Verifying bundle..."
     if [ -f "$BUNDLE_DIR/backend_server" ]; then
-        echo "✓ Backend executable found"
+        echo " Backend executable found"
         
         # Check if it's a proper executable (not a symlink)
         if [ -L "$BUNDLE_DIR/backend_server" ]; then
-            echo "❌ ERROR: backend_server is a symlink! Bundle failed."
+            echo " ERROR: backend_server is a symlink! Bundle failed."
             exit 1
         else
-            echo "✓ Backend executable is a proper binary (not a symlink)"
+            echo " Backend executable is a proper binary (not a symlink)"
         fi
         
         # Test execution (just check --help or version)
-        echo "✓ Testing backend executable..."
+        echo " Testing backend executable..."
         if "$BUNDLE_DIR/backend_server" --help &> /dev/null || true; then
-            echo "✓ Backend executable runs successfully"
+            echo " Backend executable runs successfully"
         else
-            echo "⚠️  Backend executable may have issues, but file exists"
+            echo "  Backend executable may have issues, but file exists"
         fi
     else
-        echo "❌ Backend executable not found!"
+        echo " Backend executable not found!"
         exit 1
     fi
     
     echo ""
-    echo "✅ Bundle verification passed!"
+    echo " Bundle verification passed!"
     echo ""
     echo "Next steps:"
     echo "1. Build Electron app: npm run package:mac (or :win, :linux)"
     echo "2. The bundled Python will be included automatically"
     echo "3. App will run standalone without requiring system Python"
     echo ""
-    echo "💡 Note: The bundle contains a fully self-contained Python runtime"
+    echo " Note: The bundle contains a fully self-contained Python runtime"
     echo "         with all dependencies baked in."
 else
-    echo "❌ PyInstaller bundle creation failed!"
+    echo " PyInstaller bundle creation failed!"
     echo "Expected directory not found: $PROJECT_ROOT/dist/backend_bundle"
     exit 1
 fi
@@ -199,4 +199,4 @@ if [ -d "$PROJECT_ROOT/dist" ]; then
 fi
 
 echo ""
-echo "🎉 Done!"
+echo " Done!"

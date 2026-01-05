@@ -39,18 +39,19 @@ jobs:
           npm install
           cd frontend && npm install
       
-      # macOS Python setup (Linux doesn't need python-dist)
-      - name: Create Python virtual environment (macOS)
+      # macOS Python setup - Use PyInstaller bundle
+      - name: Create Python bundle with PyInstaller (macOS)
         if: runner.os == 'macOS'
         run: |
-          python3 -m venv python-dist
-          python-dist/bin/pip install --upgrade pip
-          python-dist/bin/pip install --no-cache-dir -r requirements.txt
-          find python-dist -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find python-dist -type f -name "*.pyc" -delete || true
-          find python-dist -type f -name "*.pyo" -delete || true
-          find python-dist -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-          find python-dist -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyinstaller
+          python3 -m pip install -r requirements.txt
+          pyinstaller --clean --noconfirm backend_bundle.spec
+          
+          # Move PyInstaller output to python-dist
+          if [ -d "dist/backend_bundle" ]; then
+            mv dist/backend_bundle python-dist
+          fi
       
       # Linux: Verify Python is available (will be installed by app on first run)
       - name: Verify Python available (Linux)
@@ -59,25 +60,43 @@ jobs:
           python3 --version
           echo "Python will be installed by the app on first run using system Python"
       
-      # Windows Python setup
-      - name: Create Python virtual environment (Windows)
+      # Windows Python setup - Use PyInstaller bundle
+      - name: Create Python bundle with PyInstaller (Windows)
         if: runner.os == 'Windows'
         run: |
-          python -m venv python-dist
-          python-dist\Scripts\pip install --upgrade pip
-          python-dist\Scripts\pip install --no-cache-dir -r requirements.txt
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+          python -m pip install -r requirements.txt
+          pyinstaller --clean --noconfirm backend_bundle.spec
+          
+          # Move PyInstaller output to python-dist
+          if (Test-Path "dist\backend_bundle") {
+            Move-Item -Path "dist\backend_bundle" -Destination "python-dist"
+          }
+        shell: pwsh
       
       - name: Verify Python environment (macOS)
         if: runner.os == 'macOS'
         run: |
-          python-dist/bin/python3 --version
-          python-dist/bin/python3 -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+          if [ -f "python-dist/backend_server" ]; then
+            echo "Backend executable created successfully"
+            ls -lh python-dist/ | head -10
+          else
+            echo "Backend executable not found!"
+            exit 1
+          fi
       
       - name: Verify Python environment (Windows)
         if: runner.os == 'Windows'
         run: |
-          python-dist\Scripts\python --version
-          python-dist\Scripts\python -c "import uvicorn; import fastapi; print('Backend dependencies OK')"
+          if (Test-Path "python-dist\backend_server.exe") {
+            Write-Host "Backend executable created successfully"
+            Get-ChildItem python-dist -Recurse | Select-Object -First 10
+          } else {
+            Write-Error "Backend executable not found!"
+            exit 1
+          }
+        shell: pwsh
       
       - name: Build application
         run: npm run build
@@ -111,6 +130,7 @@ jobs:
             release/*.AppImage
             release/*.deb
             release/*.tar.gz
+            release/latest-linux.yml
           retention-days: 30
       
       - name: Upload macOS artifacts
@@ -121,8 +141,8 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+            release/latest-mac.yml
           retention-days: 30
-      
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
@@ -131,6 +151,7 @@ jobs:
           path: |
             release/*.exe
             release/*.zip
+            release/latest.yml
           retention-days: 30
 
   create-release:

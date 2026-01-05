@@ -22,11 +22,17 @@ npm run dev
 # Clean previous bundle
 rm -rf python-dist/
 
-# Create PyInstaller bundle
+# macOS/Linux: Create PyInstaller bundle
 ./scripts/bundle-python-pyinstaller.sh
+
+# Windows: Create PyInstaller bundle
+.\scripts\bundle-python-pyinstaller-windows.bat
+# Or run PowerShell directly:
+# .\scripts\bundle-python-pyinstaller-windows.ps1
 ```
 - [ ] Script completes without errors
-- [ ] `python-dist/backend_server` exists and is not a symlink
+- [ ] `python-dist/backend_server` (macOS/Linux) or `python-dist/backend_server.exe` (Windows) exists
+- [ ] Bundle is not a symlink (real executable)
 - [ ] Bundle size ~800MB (includes PyTorch models)
 
 ### 3. Version Bump

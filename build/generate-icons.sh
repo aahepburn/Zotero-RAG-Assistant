@@ -20,9 +20,9 @@ for size in 16 32 48 64 128 256 512; do
     echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > "$ICON_DIR/${size}x${size}.png"
 done
 
-echo "✓ Linux icons created in $ICON_DIR"
+echo " Linux icons created in $ICON_DIR"
 echo ""
-echo "⚠️  IMPORTANT: These are placeholder icons!"
+echo "  IMPORTANT: These are placeholder icons!"
 echo "   For production releases, replace with proper branded icons:"
 echo "   - macOS: build/icon.icns (512x512+)"
 echo "   - Windows: build/icon.ico (256x256+)"

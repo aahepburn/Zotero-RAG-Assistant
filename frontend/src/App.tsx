@@ -7,6 +7,7 @@ import "./styles/globals.css";
 import "./styles/theme.css";
 import { ChatProvider } from "./contexts/ChatContext";
 import { SessionsProvider } from "./contexts/SessionsContext";
+import { ResponseSelectionProvider } from "./contexts/ResponseSelectionContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { ProfileProvider } from "./contexts/ProfileContext";
 
@@ -15,12 +16,14 @@ const App: React.FC = () => (
 		<ProfileProvider>
 			<SettingsProvider>
 				<SessionsProvider>
-					<ChatProvider>
-						<Routes>
-							<Route path="/" element={<AppShell />} />
-							<Route path="/settings" element={<Settings />} />
-						</Routes>
-					</ChatProvider>
+					<ResponseSelectionProvider>
+						<ChatProvider>
+							<Routes>
+								<Route path="/" element={<AppShell />} />
+								<Route path="/settings" element={<Settings />} />
+							</Routes>
+						</ChatProvider>
+					</ResponseSelectionProvider>
 				</SessionsProvider>
 			</SettingsProvider>
 		</ProfileProvider>
