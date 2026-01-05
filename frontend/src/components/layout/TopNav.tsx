@@ -108,6 +108,7 @@ const TopNav: React.FC = () => {
   const [title, setTitle] = useState(session?.title ?? "Zotero RAG Assistant");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showIndexMenu, setShowIndexMenu] = useState(false);
+  const [skipWarningsDismissed, setSkipWarningsDismissed] = useState(false);
 
   useEffect(() => {
     setTitle(session?.title ?? "Zotero RAG Assistant");
@@ -134,6 +135,7 @@ const TopNav: React.FC = () => {
     if (reindexing) return;
     try {
       setReindexing(true);
+      setSkipWarningsDismissed(false); // Reset warnings on new index
       setShowIndexMenu(false);
       const resp = await apiFetch("/api/index_library", { 
         method: "POST",
@@ -515,32 +517,6 @@ const TopNav: React.FC = () => {
                     <span style={{ marginLeft: 8 }}>
                       ({indexStatus.progress.skipped_items} already indexed)
                     </span>
-                  )}
-                </div>
-              )}
-              {/* Show skip reasons if any */}
-              {indexStatus.progress?.skip_reasons && indexStatus.progress.skip_reasons.length > 0 && (
-                <div style={{ 
-                  marginTop: 8, 
-                  padding: 8, 
-                  background: 'rgba(255, 152, 0, 0.08)', 
-                  border: '1px solid rgba(255, 152, 0, 0.3)', 
-                  borderRadius: 4,
-                  fontSize: 11,
-                  color: '#e65100',
-                  maxHeight: 120,
-                  overflow: 'auto'
-                }}>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                    WARNING: {indexStatus.progress.skip_reasons.length} item(s) skipped:
-                  </div>
-                  {indexStatus.progress.skip_reasons.slice(0, 3).map((reason: string, idx: number) => (
-                    <div key={idx} style={{ marginTop: 2, fontSize: 10 }}>• {reason}</div>
-                  ))}
-                  {indexStatus.progress.skip_reasons.length > 3 && (
-                    <div style={{ marginTop: 4, fontStyle: 'italic' }}>
-                      ...and {indexStatus.progress.skip_reasons.length - 3} more
-                    </div>
                   )}
                 </div>
               )}

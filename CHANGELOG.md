@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - TBD
+## [0.2.1] - 2026-01-05
+
+### Fixed
+- Removed skip warnings from navbar during sync to prevent UI disruption
+- Warnings still logged to backend console for diagnostics
+
+## [0.2.0] - 2026-01-05
 
 ### Added
 
