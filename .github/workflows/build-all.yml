@@ -101,10 +101,6 @@ jobs:
       - name: Build application
         run: npm run build
       
-      # Clean release directory to avoid conflicts
-      - name: Clean release directory
-        run: rm -rf release
-      
       # Platform-specific packaging
       - name: Package Linux
         if: runner.os == 'Linux'
