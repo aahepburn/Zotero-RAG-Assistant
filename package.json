@@ -178,20 +178,6 @@
     "linux": {
       "extraResources": [
         {
-          "from": "backend",
-          "to": "backend",
-          "filter": [
-            "**/*",
-            "!__pycache__",
-            "!*.pyc",
-            "!tests"
-          ]
-        },
-        {
-          "from": "requirements.txt",
-          "to": "requirements.txt"
-        },
-        {
           "from": "build/linux-postinstall.sh",
           "to": "../linux-postinstall.sh"
         }
