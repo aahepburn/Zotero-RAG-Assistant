@@ -1,5 +1,5 @@
-// In Electron production, we need to use the full backend URL
-// In development (Vite dev server), we can use relative paths with proxy
+// In Electron production, use the full backend URL
+// In development (Vite dev server), use relative paths with proxy
 const isElectron = navigator.userAgent.includes('Electron');
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || (isElectron ? "http://localhost:8000" : "");
 
