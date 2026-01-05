@@ -101,6 +101,16 @@ jobs:
       - name: Build application
         run: npm run build
       
+      # Completely remove release directory to start fresh
+      - name: Remove release directory (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: rm -rf release
+      
+      - name: Remove release directory (Windows)
+        if: runner.os == 'Windows'
+        run: if (Test-Path "release") { Remove-Item -Path "release" -Recurse -Force -ErrorAction SilentlyContinue }
+        shell: pwsh
+      
       # Platform-specific packaging
       - name: Package Linux
         if: runner.os == 'Linux'
