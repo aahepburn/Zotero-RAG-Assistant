@@ -354,8 +354,9 @@ class ZoteroChatbot:
                     skip_reason = f"Item {item_id}: Failed to add to ChromaDB - {str(e)}"
                     print(f"ERROR: {skip_reason}")
                     self.index_progress["skip_reasons"].append(skip_reason)
-                    self.index_progress["processed_items"] += 1
-                    continue
+                
+                # Update progress after processing this item (success or failure)
+                self.index_progress["processed_items"] += 1
                 
                 # Calculate time estimates
                 elapsed = time.time() - self.index_progress["start_time"]

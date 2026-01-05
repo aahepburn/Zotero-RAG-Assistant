@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1] - 2026-01-05
 
 ### Fixed
+- Fixed incremental sync progress bar getting stuck at low counts
 - Removed skip warnings from navbar during sync to prevent UI disruption
 - Warnings still logged to backend console for diagnostics
 
