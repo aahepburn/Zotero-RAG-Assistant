@@ -50,7 +50,6 @@
     "appId": "com.aahepburn.zotero-rag",
     "productName": "ZoteroRAG",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-    "overwrite": true,
     "publish": [
       {
         "provider": "github",
