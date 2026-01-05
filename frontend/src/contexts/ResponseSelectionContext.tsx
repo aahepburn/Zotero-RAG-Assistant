@@ -10,11 +10,6 @@ const ResponseSelectionContext = createContext<ResponseSelectionShape | null>(nu
 export const ResponseSelectionProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
   const [selectedResponseId, setSelectedResponseId] = useState<string | null>(null);
 
-  // Log when selection changes
-  React.useEffect(() => {
-    console.log("ResponseSelection: selectedResponseId changed to", selectedResponseId);
-  }, [selectedResponseId]);
-
   return (
     <ResponseSelectionContext.Provider value={{ selectedResponseId, setSelectedResponseId }}>
       {children}

@@ -18,10 +18,20 @@
   --accent-focus: #d6b26a;      /* bookmark gold */
   --bg-surface: #ffffff;        /* pure white surface */
 
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
-    "Cormorant Garamond", "Georgia", "Times New Roman", serif;
+  /* Sans-serif: Clean, modern system fonts optimized for each platform */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Roboto", 
+    "Helvetica Neue", "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", 
+    "Arial", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  
+  /* Serif: Elegant, book-like fonts for headings and emphasis */
+  /* Prioritizes fonts with excellent Linux/Ubuntu rendering */
+  --font-serif: "Iowan Old Style", "Georgia", "Noto Serif", "Liberation Serif",
+    "Palatino Linotype", "Palatino", "Book Antiqua", "Georgia Pro", 
+    "Cambria", "Times New Roman", serif, "Apple Color Emoji", "Segoe UI Emoji";
+  
+  /* Monospace: Developer-friendly code fonts with excellent readability */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Cascadia Code", "Consolas", 
+    "Roboto Mono", "Ubuntu Mono", "Liberation Mono", "Courier New", monospace;
 
   --radius-sm: 6px;
   --radius-md: 12px;

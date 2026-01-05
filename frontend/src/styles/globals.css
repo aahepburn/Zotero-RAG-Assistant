@@ -19,7 +19,13 @@ body {
   background:
     radial-gradient(circle at top left, #fdfbf6, var(--bg-body));
   color: var(--text-main);
+  
+  /* Enhanced font rendering for all platforms */
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1;
+  font-kerning: normal;
 }
 
 /* keep the paper texture but make it slightly softer */
@@ -58,6 +64,9 @@ a:hover {
 code,
 pre {
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
 }
 
 /* Scrollbars */
@@ -83,6 +92,9 @@ pre {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-soft);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .muted {
@@ -296,6 +308,9 @@ pre {
   margin-top: 20px;
   margin-bottom: 10px;
   line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .message__body h1:first-child,

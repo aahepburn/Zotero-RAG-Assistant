@@ -35,6 +35,9 @@
   font-family: var(--font-serif);
   font-size: 1.05rem;
   font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .top-nav__title-input {
@@ -191,6 +194,9 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   color: #4a3524;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .session-header__meta {

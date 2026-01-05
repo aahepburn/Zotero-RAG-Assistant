@@ -105,6 +105,7 @@ const TopNav: React.FC = () => {
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [indexStats, setIndexStats] = useState<any>(null);
   const pollRef = React.useRef<number | null>(null);
+  const indexingRef = React.useRef<boolean>(false);
   const [title, setTitle] = useState(session?.title ?? "Zotero RAG Assistant");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showIndexMenu, setShowIndexMenu] = useState(false);
@@ -113,6 +114,16 @@ const TopNav: React.FC = () => {
   useEffect(() => {
     setTitle(session?.title ?? "Zotero RAG Assistant");
   }, [session]);
+
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   // Fetch index stats periodically
   useEffect(() => {
@@ -132,7 +143,8 @@ const TopNav: React.FC = () => {
   }, []);
 
   const startIndexing = async (incremental: boolean) => {
-    if (reindexing) return;
+    if (reindexing || indexingRef.current) return;
+    indexingRef.current = true;
     try {
       setReindexing(true);
       setSkipWarningsDismissed(false); // Reset warnings on new index
@@ -174,14 +186,17 @@ const TopNav: React.FC = () => {
               pollRef.current = null; 
             }
             setReindexing(false);
+            indexingRef.current = false;
           }
         }, 1500) as unknown as number;
       } else {
         setReindexing(false);
+        indexingRef.current = false;
       }
     } catch (e: any) {
       console.error("Indexing request failed", e);
       setReindexing(false);
+      indexingRef.current = false;
       setIndexStatus({ status: 'error', progress: undefined });
     }
   };
@@ -399,14 +414,16 @@ const TopNav: React.FC = () => {
               }}>
                 <button
                   onClick={() => startIndexing(true)}
+                  disabled={reindexing}
                   style={{
                     width: '100%',
                     padding: '10px 16px',
                     border: 'none',
                     background: 'transparent',
                     textAlign: 'left',
-                    cursor: 'pointer',
-                    fontSize: 14
+                    cursor: reindexing ? 'not-allowed' : 'pointer',
+                    fontSize: 14,
+                    opacity: reindexing ? 0.5 : 1
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -421,14 +438,16 @@ const TopNav: React.FC = () => {
                 <div style={{ height: 1, background: 'var(--border)' }} />
                 <button
                   onClick={() => startIndexing(false)}
+                  disabled={reindexing}
                   style={{
                     width: '100%',
                     padding: '10px 16px',
                     border: 'none',
                     background: 'transparent',
                     textAlign: 'left',
-                    cursor: 'pointer',
-                    fontSize: 14
+                    cursor: reindexing ? 'not-allowed' : 'pointer',
+                    fontSize: 14,
+                    opacity: reindexing ? 0.5 : 1
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}

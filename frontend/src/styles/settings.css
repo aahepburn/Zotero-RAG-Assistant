@@ -46,6 +46,9 @@
   color: var(--text-main);
   margin: 0;
   letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .settings-loading {
@@ -79,6 +82,9 @@
   color: var(--text-main);
   margin: 0 0 12px 0;
   letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .settings-section-description {
