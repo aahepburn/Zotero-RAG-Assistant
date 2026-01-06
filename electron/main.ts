@@ -93,7 +93,7 @@ async function killExistingBackendProcesses(): Promise<void> {
           const { execSync } = require('child_process');
           // Use lsof to find process using the port
           const result = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf-8' });
-          const pids = result.trim().split('\n').filter(pid => pid && pid !== '');
+          const pids = result.trim().split('\n').filter((pid: string) => pid && pid !== '');
           
           if (pids.length > 0) {
             console.log(`Found ${pids.length} process(es) using port ${port}: ${pids.join(', ')}`);
