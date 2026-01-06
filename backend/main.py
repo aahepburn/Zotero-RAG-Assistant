@@ -300,6 +300,27 @@ def health_check():
             "timestamp": __import__("datetime").datetime.now().isoformat()
         }
 
+@app.post("/shutdown")
+async def shutdown():
+    """
+    Graceful shutdown endpoint.
+    Allows Electron to cleanly shut down the backend server.
+    """
+    import signal
+    import threading
+    
+    def delayed_shutdown():
+        """Shutdown after a brief delay to allow response to be sent"""
+        import time
+        time.sleep(0.5)  # Give time for response to be sent
+        os.kill(os.getpid(), signal.SIGTERM)
+    
+    # Start shutdown in background thread
+    thread = threading.Thread(target=delayed_shutdown, daemon=True)
+    thread.start()
+    
+    return {"status": "shutting_down", "message": "Server will shutdown in 0.5 seconds"}
+
 @app.get("/api/pdfsample")
 def pdf_sample(
     filename: str = Query(..., description="Path to PDF file, e.g. backend/sample_pdfs/test_article.pdf"),

@@ -10,9 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.3] - 2026-01-06
 
 ### Fixed
-- Fixed Debian package control file syntax causing dpkg installation errors
-- Corrected multi-line Description field formatting to comply with Debian policy
-- Updated vendor field for consistency with maintainer information
+- Fixed "address already in use" crash on startup when port 8000 is occupied
+- Added automatic cleanup of orphaned backend processes before app startup
+- Implemented dynamic port selection (8000-8010) if default port is unavailable
+- Enhanced graceful shutdown with proper port release verification
+- Added backend `/shutdown` endpoint for clean server termination
+- Improved signal handling (SIGTERM, SIGINT) to ensure cleanup on force quit
+- Backend now automatically retries with available ports if requested port is in use
 
 ## [0.2.2] - 2026-01-05
 

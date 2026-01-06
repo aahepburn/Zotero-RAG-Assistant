@@ -20,8 +20,8 @@ import axios from 'axios';
 // Detect development vs production mode
 // app.isPackaged is the most reliable way - it's false during development, true when packaged
 const IS_DEV = !app.isPackaged;
-const BACKEND_PORT = 8000;
-const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
+let BACKEND_PORT = 8000;
+let BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const FRONTEND_DEV_URL = 'http://localhost:5173';
 
 // Global references
@@ -36,6 +36,123 @@ let updateInfo: { version: string; releaseNotes?: string } | null = null;
  */
 function generateAuthToken(): string {
   return require('crypto').randomBytes(32).toString('hex');
+}
+
+/**
+ * Check if a port is available
+ */
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const server = net.createServer();
+    
+    server.once('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        resolve(false);
+      }
+    });
+    
+    server.once('listening', () => {
+      server.close();
+      resolve(true);
+    });
+    
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+/**
+ * Find an available port starting from the preferred port
+ */
+async function findAvailablePort(preferredPort: number = 8000, maxTries: number = 10): Promise<number | null> {
+  for (let i = 0; i < maxTries; i++) {
+    const port = preferredPort + i;
+    const available = await isPortAvailable(port);
+    if (available) {
+      return port;
+    }
+    console.log(`Port ${port} is in use, trying next...`);
+  }
+  return null;
+}
+
+/**
+ * Kill any existing backend processes that might be stuck
+ * This prevents "address already in use" errors
+ */
+async function killExistingBackendProcesses(): Promise<void> {
+  console.log('Checking for existing backend processes...');
+  
+  try {
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      // Find processes using port 8000-8010
+      for (let port = 8000; port <= 8010; port++) {
+        try {
+          const { execSync } = require('child_process');
+          // Use lsof to find process using the port
+          const result = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf-8' });
+          const pids = result.trim().split('\n').filter(pid => pid && pid !== '');
+          
+          if (pids.length > 0) {
+            console.log(`Found ${pids.length} process(es) using port ${port}: ${pids.join(', ')}`);
+            for (const pid of pids) {
+              try {
+                // Check if it's our backend process
+                const procInfo = execSync(`ps -p ${pid} -o command= 2>/dev/null || true`, { encoding: 'utf-8' });
+                if (procInfo.includes('backend_server') || procInfo.includes('uvicorn') || procInfo.includes('zotero-rag')) {
+                  console.log(`  Killing backend process ${pid}...`);
+                  execSync(`kill -9 ${pid} 2>/dev/null || true`);
+                  console.log(`  ✓ Killed process ${pid}`);
+                }
+              } catch (e) {
+                // Process might have already exited
+              }
+            }
+          }
+        } catch (e) {
+          // lsof failed or no process found, continue
+        }
+      }
+    } else if (process.platform === 'win32') {
+      // Windows: Use netstat to find and kill processes
+      const { execSync } = require('child_process');
+      for (let port = 8000; port <= 8010; port++) {
+        try {
+          const result = execSync(`netstat -ano | findstr :${port}`, { encoding: 'utf-8' });
+          const lines = result.split('\n');
+          const pids = new Set<string>();
+          
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            const pid = parts[parts.length - 1];
+            if (pid && pid !== '0' && !isNaN(Number(pid))) {
+              pids.add(pid);
+            }
+          }
+          
+          if (pids.size > 0) {
+            console.log(`Found ${pids.size} process(es) using port ${port}: ${Array.from(pids).join(', ')}`);
+            for (const pid of pids) {
+              try {
+                execSync(`taskkill /F /PID ${pid}`);
+                console.log(`  ✓ Killed process ${pid}`);
+              } catch (e) {
+                // Process might have already exited
+              }
+            }
+          }
+        } catch (e) {
+          // No process found on this port
+        }
+      }
+    }
+    console.log('✓ Cleanup complete');
+  } catch (error) {
+    console.warn('Warning: Error during process cleanup:', error);
+    // Non-fatal, continue with startup
+  }
 }
 
 /**
@@ -523,7 +640,11 @@ async function waitForBackend(maxRetries = 30, delayMs = 1000): Promise<boolean>
  * Spawn the Python backend process
  */
 async function startBackend(): Promise<boolean> {
-  const backendConfig = await getBackendPath();
+  // Kill any existing backend processes before starting
+  await killExistingBackendProcesses();
+  
+  // Find an available port
+  console.log(`Checking port availability (preferred: ${BACKEND_PORT})...`);\n  const availablePort = await findAvailablePort(BACKEND_PORT);\n  if (!availablePort) {\n    console.error('================================================================================');\n    console.error('✗ FATAL: Could not find an available port for backend');\n    console.error('  Ports 8000-8010 are all in use');\n    console.error('================================================================================');\n    \n    dialog.showErrorBox(\n      'No Available Port',\n      'Could not find an available port to start the backend service.\\n\\n' +\n      'Ports 8000-8010 are all in use. Please close other applications and try again.'\n    );\n    return false;\n  }\n  \n  if (availablePort !== BACKEND_PORT) {\n    console.log(`Port ${BACKEND_PORT} unavailable, using port ${availablePort}`);\n    BACKEND_PORT = availablePort;\n    BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;\n  } else {\n    console.log(`✓ Port ${BACKEND_PORT} is available`);\n  }\n  \n  const backendConfig = await getBackendPath();
   
   if (!backendConfig) {
     console.error('================================================================================');
@@ -814,41 +935,134 @@ async function startBackend(): Promise<boolean> {
 /**
  * Stop the backend process gracefully
  */
-function stopBackend(): void {
-  if (backendProcess) {
-    console.log('Stopping backend process...');
-    
-    const pid = backendProcess.pid;
+async function stopBackend(): Promise<void> {
+  if (!backendProcess) {
+    console.log('No backend process to stop');
+    return;
+  }
+  
+  console.log('Stopping backend process...');
+  
+  const pid = backendProcess.pid;
+  
+  if (!pid) {
+    console.log('Backend process has no PID, clearing reference');
+    backendProcess = null;
+    return;
+  }
+  
+  try {
+    // First, try graceful shutdown via HTTP if backend is responsive
+    try {
+      console.log('Attempting graceful shutdown via /shutdown endpoint...');
+      await axios.post(`${BACKEND_URL}/shutdown`, {}, { timeout: 1000 });
+      console.log('✓ Graceful shutdown signal sent');
+      
+      // Wait a bit for graceful shutdown
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Check if process exited
+      if (backendProcess && backendProcess.exitCode !== null) {
+        console.log('✓ Backend exited gracefully');
+        backendProcess = null;
+        return;
+      }
+    } catch (e) {
+      console.log('Graceful shutdown failed, proceeding with SIGTERM...');
+    }
     
     // Kill entire process tree (Python spawns child processes like ChromaDB)
-    if (pid) {
+    if (process.platform === 'win32') {
+      // Windows: use taskkill to kill process tree
+      const { execSync } = require('child_process');
+      console.log('Sending SIGTERM via taskkill...');
+      execSync(`taskkill /pid ${pid.toString()} /T /F`, { timeout: 3000 });
+    } else {
+      // Unix: kill process group (negative PID kills the group)
+      console.log('Sending SIGTERM to process group...');
+      process.kill(-pid, 'SIGTERM');
+      
+      // Wait for graceful shutdown
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Force kill if still running
       try {
-        if (process.platform === 'win32') {
-          // Windows: use taskkill to kill process tree
-          spawn('taskkill', ['/pid', pid.toString(), '/T', '/F']);
-        } else {
-          // Unix: kill process group (negative PID kills the group)
-          process.kill(-pid, 'SIGTERM');
-          
-          // Force kill after timeout
-          setTimeout(() => {
-            try {
-              process.kill(-pid, 'SIGKILL');
-            } catch (e) {
-              // Process already dead
-            }
-          }, 2000);
+        if (backendProcess && backendProcess.exitCode === null) {
+          console.log('Backend still running, sending SIGKILL...');
+          process.kill(-pid, 'SIGKILL');
         }
-        console.log('✓ Backend process tree killed');
-      } catch (error) {
-        console.error('Error killing backend:', error);
-        // Fallback to normal kill
-        backendProcess.kill('SIGKILL');
+      } catch (e) {
+        // Process already dead
+        console.log('Process already terminated');
       }
     }
     
+    console.log('✓ Backend process tree killed');
+    
+    // Wait a moment for port to be released
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Verify port is released
+    const portReleased = await isPortAvailable(BACKEND_PORT);
+    if (portReleased) {
+      console.log(`✓ Port ${BACKEND_PORT} successfully released`);
+    } else {
+      console.warn(`⚠ Port ${BACKEND_PORT} may still be in use`);
+    }
+    
+  } catch (error) {
+    console.error('Error during backend shutdown:', error);
+    
+    // Fallback: force kill
+    try {
+      if (backendProcess) {
+        backendProcess.kill('SIGKILL');
+        console.log('✓ Force killed backend process');
+      }
+    } catch (e) {
+      console.error('Could not force kill:', e);
+    }
+  } finally {
     backendProcess = null;
   }
+}
+
+/**
+ * Synchronous version of stopBackend for signal handlers
+ */
+function stopBackendSync(): void {
+  if (!backendProcess || !backendProcess.pid) {
+    return;
+  }
+  
+  const pid = backendProcess.pid;
+  console.log('Stopping backend process (sync)...');
+  
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', pid.toString(), '/T', '/F']);
+    } else {
+      process.kill(-pid, 'SIGTERM');
+      // Immediate force kill for sync version
+      setTimeout(() => {
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch (e) {
+          // Process already dead
+        }
+      }, 500);
+    }
+    console.log('✓ Backend process killed');
+  } catch (error) {
+    console.error('Error killing backend:', error);
+    try {
+      backendProcess?.kill('SIGKILL');
+    } catch (e) {
+      // Ignore
+    }
+  }
+  
+  backendProcess = null;
 }
 
 /**
@@ -1202,13 +1416,13 @@ app.on('ready', async () => {
                 "default-src 'self' http://localhost:5173 ws://localhost:5173; " +
                 "script-src 'self' http://localhost:5173 'unsafe-inline'; " +
                 "style-src 'self' http://localhost:5173 'unsafe-inline'; " +
-                "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://127.0.0.1:8000 http://localhost:8000; " +
+                `connect-src 'self' http://localhost:5173 ws://localhost:5173 ${BACKEND_URL} http://localhost:${BACKEND_PORT}; ` +
                 "img-src 'self' data: http://localhost:5173;"
               : // Production: Strict CSP
                 "default-src 'self'; " +
                 "script-src 'self'; " +
                 "style-src 'self' 'unsafe-inline'; " +
-                "connect-src 'self' http://127.0.0.1:8000 http://localhost:8000; " +
+                `connect-src 'self' ${BACKEND_URL} http://localhost:${BACKEND_PORT}; ` +
                 "img-src 'self' data:;"
           ]
         }
@@ -1256,7 +1470,7 @@ app.on('ready', async () => {
       const response = await dialog.showMessageBox({
         type: 'warning',
         title: 'Backend Not Detected',
-        message: 'Could not connect to backend at http://localhost:8000.\n\nMake sure you\'re running "npm run dev" which starts the backend automatically.',
+        message: `Could not connect to backend at ${BACKEND_URL}.\n\nMake sure you're running "npm run dev" which starts the backend automatically.`,
         buttons: ['Exit', 'Continue Anyway'],
         defaultId: 1
       });
@@ -1296,9 +1510,24 @@ app.on('activate', () => {
 /**
  * Before quit event - cleanup
  */
-app.on('before-quit', () => {
-  console.log('App is quitting, cleaning up...');
-  stopBackend();
+app.on('before-quit', async (event) => {
+  if (backendProcess) {
+    event.preventDefault();
+    console.log('App is quitting, cleaning up...');
+    await stopBackend();
+    console.log('✓ Cleanup complete, exiting');
+    app.exit(0);
+  }
+});
+
+/**
+ * Handle window close - ensure cleanup
+ */
+app.on('will-quit', (event) => {
+  if (backendProcess) {
+    console.log('Emergency cleanup on will-quit...');
+    stopBackendSync();
+  }
 });
 
 /**
@@ -1306,5 +1535,28 @@ app.on('before-quit', () => {
  */
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
+  stopBackendSync();
   dialog.showErrorBox('Application Error', `An unexpected error occurred: ${error.message}`);
+});
+
+/**
+ * Handle unhandled promise rejections
+ */
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+
+/**
+ * Handle process termination signals
+ */
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, cleaning up...');
+  stopBackendSync();
+  app.quit();
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, cleaning up...');
+  stopBackendSync();
+  app.quit();
 });
