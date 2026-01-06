@@ -96,34 +96,22 @@ Download the latest installer from [Releases](https://github.com/aahepburn/Zoter
 
 #### Linux
 
-**Debian/Ubuntu (Recommended)**
+Download the `.deb` package from [Releases](https://github.com/aahepburn/Zotero-RAG-Assistant/releases) and install:
+
 ```bash
-# Download the .deb package
-wget https://github.com/aahepburn/Zotero-RAG-Assistant/releases/download/v0.1.7/zotero-rag-assistant_0.1.7_amd64.deb
+# Download the latest .deb package (amd64 or arm64)
+wget https://github.com/aahepburn/Zotero-RAG-Assistant/releases/latest/download/ZoteroRAG-{version}-linux-amd64.deb
 
 # Install (automatically handles dependencies)
-sudo apt install ./zotero-rag-assistant_0.1.7_amd64.deb
+sudo apt install ./ZoteroRAG-{version}-linux-amd64.deb
 
 # Launch from application menu or terminal
 zotero-rag-assistant
 ```
 
-**Other Distributions (AppImage)**
-```bash
-# Download AppImage
-wget https://github.com/aahepburn/Zotero-RAG-Assistant/releases/download/v0.1.7/Zotero-RAG-Assistant-0.1.7-linux-x64.AppImage
+**System Requirements:** Debian/Ubuntu-based distributions (Ubuntu 18.04+, Debian 10+, or equivalent)
 
-# Make executable and run
-chmod +x Zotero-RAG-Assistant-0.1.7-linux-x64.AppImage
-./Zotero-RAG-Assistant-0.1.7-linux-x64.AppImage
-```
-
-**System Requirements:** 
-- Modern Linux distribution (Ubuntu 18.04+, Debian 10+, Fedora 28+, or equivalent)
-- User namespaces enabled (default on most systems)
-- See [docs/LINUX_PACKAGING.md](docs/LINUX_PACKAGING.md) for detailed Linux information
-
-**Note:** All installers include Python and dependencies. No additional setup required.
+**Note:** The installer includes Python and all dependencies. No additional setup required. For other distributions, see [docs/LINUX_PACKAGING.md](docs/LINUX_PACKAGING.md).
 
 ### Run from Source (Developers)
 
