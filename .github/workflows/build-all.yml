@@ -121,7 +121,29 @@ jobs:
       
       - name: Package macOS
         if: runner.os == 'macOS'
-        run: npm run package:mac
+        run: |
+          max_attempts=3
+          attempt=1
+          success=false
+          
+          while [ $attempt -le $max_attempts ] && [ "$success" != "true" ]; do
+            echo "Build attempt $attempt of $max_attempts..."
+            if npm run package:mac; then
+              success=true
+              echo "Build succeeded on attempt $attempt"
+            else
+              if [ $attempt -eq $max_attempts ]; then
+                echo "Build failed after $max_attempts attempts"
+                exit 1
+              fi
+              echo "Build failed on attempt $attempt. Retrying in 10 seconds..."
+              sleep 10
+              # Clean up any mounted volumes
+              hdiutil detach /Volumes/ZoteroRAG* 2>/dev/null || true
+              rm -rf release/*.dmg 2>/dev/null || true
+              attempt=$((attempt + 1))
+            fi
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
