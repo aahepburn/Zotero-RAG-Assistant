@@ -127,7 +127,29 @@ jobs:
       
       - name: Package Windows
         if: runner.os == 'Windows'
-        run: npm run package:win
+        run: |
+          $maxAttempts = 3
+          $attempt = 1
+          $success = $false
+          
+          while ($attempt -le $maxAttempts -and -not $success) {
+            Write-Host "Build attempt $attempt of $maxAttempts..."
+            try {
+              npm run package:win
+              $success = $true
+              Write-Host "Build succeeded on attempt $attempt"
+            }
+            catch {
+              if ($attempt -eq $maxAttempts) {
+                Write-Error "Build failed after $maxAttempts attempts"
+                exit 1
+              }
+              Write-Host "Build failed on attempt $attempt. Retrying in 10 seconds..."
+              Start-Sleep -Seconds 10
+              $attempt++
+            }
+          }
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       

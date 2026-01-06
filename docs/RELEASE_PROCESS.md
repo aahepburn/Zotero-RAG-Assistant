@@ -2,6 +2,49 @@
 
 This guide walks you through creating a new release of the Zotero LLM Desktop App with automatic updates.
 
+## Official Release Workflow
+
+**⚠️ IMPORTANT: The official release workflow is "Build All Platforms" (`.github/workflows/build-all.yml`).**
+
+This is the **only** workflow that should be used for creating releases. It:
+- Builds for all three platforms (macOS, Windows, Linux) in a single workflow
+- Creates platform-specific installers automatically
+- Uploads artifacts and creates GitHub releases
+- Ensures consistency across all platforms
+
+**To trigger a release:**
+1. Push a version tag: `git push origin v0.x.x`
+2. OR manually trigger the workflow from GitHub Actions with a version number
+
+Do not create separate or custom workflows for releases.
+
+## Quick Release Commands
+
+**Standard release sequence (use this for all releases):**
+
+```bash
+# 1. Update version in package.json first (manually)
+
+# 2. Commit all changes with a clear release message
+git add package.json CHANGELOG.md [any other files]
+git commit -m "Release v0.x.x - Brief description of changes"
+
+# 3. Create tag and push everything
+git tag v0.x.x
+git push origin master
+git push origin v0.x.x
+
+# 4. Verify workflow triggered
+echo "Check status at: https://github.com/aahepburn/Zotero-RAG-Assistant/actions"
+```
+
+**Important notes:**
+- Always update `package.json` version first
+- Use semantic versioning (v0.2.3, v1.0.0, etc.)
+- Push master and tag separately (NOT `git push origin master --tags`)
+- Verify the GitHub Actions workflow completes successfully
+- Check that the release was created with all platform artifacts
+
 ## Prerequisites
 
 - [ ] Git access to the repository
@@ -38,175 +81,49 @@ Update version in `package.json`:
 - `0.1.0-beta.1`: Feature complete, testing
 - `0.1.0-rc.1`: Release candidate
 
-### 3. Build Installers
+### 3. Verify Workflow Completion
 
-You need to build on each platform or use CI/CD:
+After pushing the tag, monitor the GitHub Actions workflow:
 
-#### macOS (on a Mac)
+1. **Go to Actions page:**
+   ```
+   https://github.com/aahepburn/Zotero-RAG-Assistant/actions
+   ```
 
-```bash
-# 1. Install dependencies
-npm install
+2. **Check workflow status:**
+   - All three platform builds (macOS, Windows, Linux) should complete
+   - Artifacts should be uploaded
+   - GitHub Release should be created automatically
 
-# 2. Build backend binary (optional, can skip for now)
-source .venv/bin/activate
-./build-backend.sh
+3. **Verify the release:**
+   ```
+   https://github.com/aahepburn/Zotero-RAG-Assistant/releases/latest
+   ```
 
-# 3. Build Electron app
-npm run build
-npm run package:mac
-
-# Output: release/*.dmg, release/*.zip, release/latest-mac.yml
-```
-
-#### Windows (on Windows)
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Build backend binary (optional)
-.venv\Scripts\activate
-# Run PyInstaller manually (see build-backend.sh for commands)
-
-# 3. Build Electron app
-npm run build
-npm run package:win
-
-# Output: release/*.exe, release/*.zip, release/latest.yml
-```
-
-#### Linux (on Ubuntu)
-
-```bash
-# 1. Install dependencies
-sudo apt-get install -y build-essential libfuse2
-npm install
-
-# 2. Build backend binary (optional)
-source .venv/bin/activate
-./build-backend.sh
-
-# 3. Build Electron app
-npm run build
-npm run package:linux
-
-# Output: release/*.AppImage, release/*.deb, release/latest-linux.yml
-```
-
-### 4. Verify Builds
-
-Test each installer before uploading:
-
-**macOS:**
-```bash
-# Mount DMG and drag to Applications
-open release/*.dmg
-
-# Or extract ZIP
-unzip release/*.zip
-# Run the app
-```
-
-**Windows:**
-```bash
-# Run the installer
-release\*.exe
-
-# Or extract ZIP and run
-```
-
-**Linux:**
-```bash
-# Make AppImage executable
-chmod +x release/*.AppImage
-
-# Run directly
-./release/*.AppImage
-
-# Or install DEB
-sudo dpkg -i release/*.deb
-```
-
-**Test checklist:**
-- [ ] App launches without errors
-- [ ] Backend starts and responds
-- [ ] Can index Zotero library
-- [ ] Can chat with library
-- [ ] Settings persist
-- [ ] Auto-update check works (if previous version installed)
-
-### 5. Commit and Tag
-
-```bash
-# Commit version bump
-git add package.json CHANGELOG.md
-git commit -m "Release v0.1.0"
-
-# Create and push tag
-git tag v0.1.0
-git push origin master
-git push origin v0.1.0
-```
-
-### 6. Create GitHub Release
-
-1. **Go to Releases page:**
-   https://github.com/aahepburn/zotero-llm-plugin/releases/new
-
-2. **Select your tag:** `v0.1.0`
-
-3. **Release title:** `v0.1.0 - Brief Description`
-
-4. **Description:** Use this template:
-
-```markdown
-## What's New
-
--  Feature: Added XYZ capability
--  Fix: Resolved issue with ABC
--  Performance: Improved indexing speed by 50%
-
-## Installation
-
-Download the installer for your platform:
-
-- **macOS**: [Zotero-LLM-Assistant-0.1.0-mac.dmg](link)
-- **Windows**: [Zotero-LLM-Assistant-0.1.0-win.exe](link)
-- **Linux**: [Zotero-LLM-Assistant-0.1.0-linux.AppImage](link)
-
-## Upgrade Notes
-
-If you're upgrading from v0.0.x:
-- Settings will be preserved
-- Re-indexing is recommended for improved search
-- See [Migration Guide](docs/migration_guide.md) for details
-
-## Full Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for complete changes.
-```
-
-5. **Upload artifacts:**
-
-   Drag and drop ALL files from `release/` directory:
-
-   **Required for each platform:**
+4. **Confirm all artifacts are present:**
    - macOS: `*.dmg`, `*.zip`, `latest-mac.yml`
    - Windows: `*.exe`, `*.zip`, `latest.yml`
    - Linux: `*.AppImage`, `*.deb`, `*.tar.gz`, `latest-linux.yml`
 
-   **Critical:** The `.yml` files are required for auto-updates!
+**If the workflow fails:**
+- Check the workflow logs in GitHub Actions
+- Fix any issues in the code
+- Delete the tag: `git tag -d v0.x.x && git push origin :refs/tags/v0.x.x`
+- Re-run the release process after fixing
 
-6. **Pre-release checkbox:**
-   - Check this for alpha/beta/rc releases
-   - Uncheck for stable releases
+### 4. Test the Release
 
-7. **Publish release**
+Download and test the installers from the GitHub Release:
 
-### 7. Verify Auto-Updates
+**Test checklist:**
+- [ ] App launches without errors on target platform
+- [ ] Backend starts and responds
+- [ ] Can index Zotero library
+- [ ] Can chat with library
+- [ ] Settings persist across restarts
+- [ ] Auto-update check works (if previous version installed)
 
-Install a previous version and verify update works:
+### 5. Verify Auto-Updates
 
 1. Install previous version on a test machine
 2. Launch the app
@@ -221,66 +138,36 @@ Install a previous version and verify update works:
 - [ ] Social media announcement
 - [ ] Email newsletter (if applicable)
 
-## Automation with GitHub Actions
+## Troubleshooting the Workflow
 
-To automate builds, create `.github/workflows/release.yml`:
+### Workflow doesn't trigger
 
-```yaml
-name: Build and Release
+- Verify tag starts with `v` (e.g., `v0.2.3`, not `0.2.3`)
+- Check GitHub Actions is enabled for your repository
+- View workflow runs at: https://github.com/aahepburn/Zotero-RAG-Assistant/actions
 
-on:
-  push:
-    tags:
-      - 'v*'
+### Build fails on specific platform
 
-jobs:
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-      - uses: actions/setup-python@v4
-      - run: npm install
-      - run: npm run build
-      - run: npm run package:mac
-      - uses: actions/upload-artifact@v3
-        with:
-          name: macos-build
-          path: release/*
-  
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      # Similar to macOS
-      
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      # Similar to macOS
-  
-  release:
-    needs: [build-macos, build-windows, build-linux]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v3
-      - uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            macos-build/*
-            windows-build/*
-            linux-build/*
-```
-
-## Troubleshooting
+Check the workflow logs for that platform:
+1. Go to the failed workflow run
+2. Click on the failed job (macOS, Windows, or Linux)
+3. Review the error messages
+4. Common issues:
+   - Missing dependencies
+   - PyInstaller errors
+   - Node module issues
 
 ### Build fails with "Module not found"
 
-```bash
-# Clean and reinstall
-rm -rf node_modules dist release
-npm install
-npm run build
-```
+This shouldn't happen with the automated workflow, but if it does:
+- Check the workflow file for correct dependency installation
+- Verify `requirements.txt` and `package.json` are up to date
+
+### Release not created automatically
+
+- Verify the `create-release` job completed in the workflow
+- Check that all platform builds succeeded
+- Review the workflow logs for the release job
 
 ### Auto-update not detected
 
@@ -291,21 +178,13 @@ npm run build
 
 ### Binary too large
 
-The app will be large (100-500 MB) due to Python dependencies. To reduce:
-
-1. Use `--exclude-module` in PyInstaller for unused packages
-2. Remove development dependencies
-3. Strip debug symbols (platform-specific)
+The app will be large (100-500 MB) due to Python dependencies. This is normal for bundled Python applications.
 
 ### Code signing errors (macOS)
 
-```bash
-# Verify certificate
-security find-identity -v -p codesigning
-
-# Sign manually if needed
-codesign --force --sign "Developer ID" YourApp.app
-```
+Code signing is handled in the workflow. If you see warnings:
+- macOS: First-time users may see Gatekeeper warnings (expected without paid certificate)
+- Provide instructions for users: System Preferences → Security & Privacy → "Open Anyway"
 
 ### Windows SmartScreen warning
 
