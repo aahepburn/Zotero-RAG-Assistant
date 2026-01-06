@@ -55,10 +55,9 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.2       # Lightweight, fast (1B or 3B)
 ollama pull llama3.1:8b    # Good balance of speed and quality
 ollama pull qwen2.5:7b     # Strong alternative to Llama
-
-# Required: Embedding model for semantic search
-ollama pull nomic-embed-text
 ```
+
+**Note:** The app uses SentenceTransformers for embeddings (downloaded automatically on first use), not Ollama embedding models.
 
 **Verify installation:**
 ```bash
