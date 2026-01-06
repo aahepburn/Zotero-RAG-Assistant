@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-01-06
+
+### Changed
+- Reverted Debian packaging metadata to v0.2.0 configuration to eliminate potential dpkg parsing issues
+- Removed custom FPM fields from deb configuration
+- Simplified maintainer and vendor metadata
+
+### Fixed
+- Updated Linux installation guidance in README to remove outdated version references and AppImage instructions
+
 ## [0.2.3] - 2026-01-06
 
 ### Fixed

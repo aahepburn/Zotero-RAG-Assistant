@@ -154,7 +154,33 @@ Note: Each line after "Description:" starts with a space.
 
 ## Troubleshooting
 
-If you still get parsing errors:
+### If dpkg Errors Persist After Config Changes
+
+**Important**: If you've updated the electron-builder configuration in `package.json` but still see dpkg errors, the issue is likely from stale build artifacts, not the config itself.
+
+The electron-builder config (`description`, `synopsis`, etc.) will not create invalid multi-line Description fields - these are single-line values. If errors persist:
+
+1. **Clean old build artifacts**:
+   ```bash
+   # Remove all previous builds
+   rm -rf release/
+   rm -rf dist/
+   rm -rf python-dist-linux/
+   
+   # Clear electron-builder cache
+   rm -rf node_modules/.cache/electron-builder
+   
+   # Rebuild from scratch
+   npm run package:linux
+   ```
+
+2. **Check for extra `--deb-field` options**: Look in `package.json` for any custom `--deb-field` flags that might inject newlines accidentally.
+
+3. **Verify the freshly built .deb**: Extract and inspect the control file from the new package (see testing steps above).
+
+### General Debugging Steps
+
+If you still get parsing errors after cleaning:
 
 1. **Extract and inspect**: Use `dpkg-deb -R` or `ar`/`tar` to extract the package
 2. **Check line endings**: Ensure Unix line endings (`LF`), not Windows (`CRLF`)

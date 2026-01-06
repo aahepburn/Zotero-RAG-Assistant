@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "ZoteroRAG",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -203,7 +203,7 @@
       "icon": "build/icons",
       "category": "Office",
       "synopsis": "AI-powered research assistant for Zotero",
-      "description": "Chat with your Zotero library using local LLMs",
+      "description": "Chat with your Zotero library using AI. Get cited answers, search semantically, and manage your research with intelligent assistance.",
       "desktop": {
         "Name": "Zotero RAG Assistant",
         "Comment": "AI-powered research assistant for Zotero",
@@ -211,8 +211,8 @@
         "StartupWMClass": "zotero-rag-assistant"
       },
       "executableName": "zotero-rag-assistant",
-      "maintainer": "Alexander Hepburn <aahepburn@proton.me>",
-      "vendor": "Alexander Hepburn"
+      "maintainer": "aahepburn <your-email@example.com>",
+      "vendor": "aahepburn"
     },
     "deb": {
       "packageName": "zotero-rag-assistant",
@@ -226,15 +226,7 @@
         "libgbm1"
       ],
       "priority": "optional",
-      "afterInstall": "build/linux-postinstall.sh",
-      "fpm": [
-        "--license=MIT",
-        "--url=https://github.com/aahepburn/Zotero-RAG-Assistant",
-        "--deb-field=Homepage: https://github.com/aahepburn/Zotero-RAG-Assistant",
-        "--deb-field=Vcs-Git: https://github.com/aahepburn/Zotero-RAG-Assistant.git",
-        "--deb-field=Vcs-Browser: https://github.com/aahepburn/Zotero-RAG-Assistant",
-        "--deb-field=Bugs: https://github.com/aahepburn/Zotero-RAG-Assistant/issues"
-      ]
+      "afterInstall": "build/linux-postinstall.sh"
     }
   }
 }
