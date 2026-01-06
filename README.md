@@ -40,23 +40,23 @@ Install [Zotero](https://www.zotero.org/download/) and sync your library:
 
 ### 2. Ollama (for local LLM support)
 
-Install [Ollama](https://ollama.ai/) to run language models locally:
+Install [Ollama](https://ollama.com/) to run language models locally:
 
 ```bash
 # macOS/Linux - Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
+curl -fsSL https://ollama.com/install.sh | sh
 
-# Or download from: https://ollama.ai/download
+# Or download from: https://ollama.com/download
 ```
 
 **Download models:**
 ```bash
-# Recommended models for chat
-ollama pull llama3.2       # Fast, general-purpose (3B)
-ollama pull mistral        # Good balance (7B)
-ollama pull llama3.1       # Best quality (8B/70B)
+# Recommended chat models (choose one based on your hardware)
+ollama pull llama3.2       # Lightweight, fast (1B or 3B)
+ollama pull llama3.1:8b    # Good balance of speed and quality
+ollama pull qwen2.5:7b     # Strong alternative to Llama
 
-# Recommended embedding model (required for semantic search)
+# Required: Embedding model for semantic search
 ollama pull nomic-embed-text
 ```
 
@@ -152,7 +152,7 @@ See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for detailed development instruct
    - Linux: `~/Zotero/zotero.sqlite`
 
 2. **Choose an LLM Provider**:
-   - **Ollama** (recommended for local use): Install from [ollama.ai](https://ollama.ai), then run `ollama pull llama3` or another model
+   - **Ollama** (recommended for local use): Install from [ollama.com](https://ollama.com), then run `ollama pull llama3.2` or another model
    - **OpenAI, Anthropic, etc.**: Add your API key in Settings
 
 3. **Index Your Library**: Click "Index Library" to process your PDFs. This creates embeddings for semantic search. Initial indexing may take a while depending on library size.
