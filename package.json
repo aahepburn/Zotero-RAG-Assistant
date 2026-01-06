@@ -230,7 +230,7 @@
       "fpm": [
         "--license=MIT",
         "--url=https://github.com/aahepburn/Zotero-RAG-Assistant",
-        "--description=AI-powered research assistant for your Zotero library. Chat with your documents and get cited answers with page numbers. Search semantically across your research collection. Supports local LLMs via Ollama and cloud providers.",
+        "--description=AI-powered research assistant for Zotero",
         "--deb-field=Homepage: https://github.com/aahepburn/Zotero-RAG-Assistant",
         "--deb-field=Vcs-Git: https://github.com/aahepburn/Zotero-RAG-Assistant.git",
         "--deb-field=Vcs-Browser: https://github.com/aahepburn/Zotero-RAG-Assistant",
