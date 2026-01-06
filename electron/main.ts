@@ -644,7 +644,31 @@ async function startBackend(): Promise<boolean> {
   await killExistingBackendProcesses();
   
   // Find an available port
-  console.log(`Checking port availability (preferred: ${BACKEND_PORT})...`);\n  const availablePort = await findAvailablePort(BACKEND_PORT);\n  if (!availablePort) {\n    console.error('================================================================================');\n    console.error('✗ FATAL: Could not find an available port for backend');\n    console.error('  Ports 8000-8010 are all in use');\n    console.error('================================================================================');\n    \n    dialog.showErrorBox(\n      'No Available Port',\n      'Could not find an available port to start the backend service.\\n\\n' +\n      'Ports 8000-8010 are all in use. Please close other applications and try again.'\n    );\n    return false;\n  }\n  \n  if (availablePort !== BACKEND_PORT) {\n    console.log(`Port ${BACKEND_PORT} unavailable, using port ${availablePort}`);\n    BACKEND_PORT = availablePort;\n    BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;\n  } else {\n    console.log(`✓ Port ${BACKEND_PORT} is available`);\n  }\n  \n  const backendConfig = await getBackendPath();
+  console.log(`Checking port availability (preferred: ${BACKEND_PORT})...`);
+  const availablePort = await findAvailablePort(BACKEND_PORT);
+  if (!availablePort) {
+    console.error('================================================================================');
+    console.error('✗ FATAL: Could not find an available port for backend');
+    console.error('  Ports 8000-8010 are all in use');
+    console.error('================================================================================');
+    
+    dialog.showErrorBox(
+      'No Available Port',
+      'Could not find an available port to start the backend service.\n\n' +
+      'Ports 8000-8010 are all in use. Please close other applications and try again.'
+    );
+    return false;
+  }
+  
+  if (availablePort !== BACKEND_PORT) {
+    console.log(`Port ${BACKEND_PORT} unavailable, using port ${availablePort}`);
+    BACKEND_PORT = availablePort;
+    BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
+  } else {
+    console.log(`✓ Port ${BACKEND_PORT} is available`);
+  }
+  
+  const backendConfig = await getBackendPath();
   
   if (!backendConfig) {
     console.error('================================================================================');
