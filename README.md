@@ -1,5 +1,8 @@
 # Zotero RAG Assistant
 
+<img width="1192" height="248" alt="Screenshot 2025-12-16 at 7 43 32 PM" src="https://github.com/user-attachments/assets/ae52c33d-bdbf-47ac-bcdb-2f1bc98b50cc" />
+
+
 A desktop application that lets you chat with your Zotero library using large language models. Ask questions about your research and get answers grounded in your own documents, with citations and page numbers.
 
 ## What It Does
