@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { chat as chatApi } from "../api/chat";
 import type { ChatMessage } from "../types/domain";
 import type { ChatResponse } from "../types/api";
@@ -46,17 +46,17 @@ export function useChat() {
     }
   }
 
-  function loadThread(thread: { id: string; title?: string; messages: ChatMessage[]; lastResponse?: ChatResponse }) {
+  const loadThread = useCallback((thread: { id: string; title?: string; messages: ChatMessage[]; lastResponse?: ChatResponse }) => {
     if (!thread) return;
     setMessages(thread.messages || []);
     if (thread.lastResponse) setLastResponse(thread.lastResponse);
-  }
+  }, []);
 
-  function clearMessages() {
+  const clearMessages = useCallback(() => {
     setMessages([]);
     setLastResponse(null);
     setError(null);
-  }
+  }, []);
 
   return { messages, loading, error, lastResponse, sendMessage, loadThread, clearMessages };
 }

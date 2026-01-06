@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useEffect } from "react";
 import type { ChatResponse } from "../types/api";
 import type { ChatMessage } from "../types/domain";
 import { useChat as useChatHook } from "../hooks/useChat";
@@ -76,6 +76,47 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
   const { messages, loading, error, lastResponse, sendMessage: rawSendMessage, loadThread, clearMessages } = useChatHook();
   const sessions = useSessions();
   const { setSelectedResponseId } = useResponseSelection();
+
+  // Load messages when currentSessionId changes
+  useEffect(() => {
+    const sessionId = sessions.currentSessionId;
+    if (!sessionId) {
+      // No session selected, clear chat
+      clearMessages();
+      return;
+    }
+
+    const session = sessions.getSession(sessionId);
+    if (!session || !session.messages || session.messages.length === 0) {
+      // Session exists but has no messages yet
+      clearMessages();
+      return;
+    }
+
+    // Convert session messages to ChatMessage format and load into chat view
+    const chatMessages: ChatMessage[] = session.messages.map(m => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      // Map sources from assistant messages if available
+      citations: m.role === 'assistant' && m.sources ? m.sources.map(src => ({
+        id: src.documentId,
+        title: src.title,
+        authors: src.author,
+        page: src.pageNumber,
+        zotero_key: src.zoteroKey,
+        pdf_path: src.localPdfPath
+      })) : undefined
+    }));
+
+    loadThread({ 
+      id: sessionId, 
+      title: session.title, 
+      messages: chatMessages 
+    });
+
+    console.log(`[ChatContext] Loaded ${chatMessages.length} messages from session ${sessionId}`);
+  }, [sessions.currentSessionId, sessions.getSession, loadThread, clearMessages]);
 
   async function sendMessage(content: string) {
     // Get current session ID to enable stateful conversation

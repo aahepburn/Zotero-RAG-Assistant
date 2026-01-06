@@ -290,6 +290,25 @@ const Settings: React.FC = () => {
                   </Button>
                 )}
               </div>
+              
+              <div className="settings-note" style={{ 
+                marginTop: '16px',
+                padding: '12px', 
+                backgroundColor: 'var(--bg-hover, #f8f9fa)', 
+                borderLeft: '3px solid var(--text-muted, #6c757d)', 
+                fontSize: '13px',
+                color: 'var(--text-muted)'
+              }}>
+                <strong>Note:</strong> If automatic updates don't work, you can download the latest version manually from{' '}
+                <a 
+                  href="https://github.com/aahepburn/Zotero-RAG-Assistant/releases" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--accent, #007bff)', textDecoration: 'underline' }}
+                >
+                  GitHub Releases
+                </a>.
+              </div>
             </div>
           </section>
         )}
@@ -383,7 +402,7 @@ const Settings: React.FC = () => {
               </option>
             </select>
             <p className="settings-hint settings-warning">
-               Changing the embedding model requires re-indexing your library. The new model will be used for new documents and queries, but existing embeddings will remain incompatible until you re-index.
+               Changing the embedding model requires re-indexing your library. To preserve existing embeddings and try a different model, create a new profile instead. Each profile maintains separate embeddings and settings.
             </p>
           </div>
         </section>

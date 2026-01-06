@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { Session, Snippet, Source, Message } from "../types/session";
 
 // Legacy type alias for backward compatibility
@@ -179,9 +179,9 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
     setRightCollapsed((p) => !p);
   }
 
-  function getSession(id: string) {
+  const getSession = useCallback((id: string) => {
     return sessions[id] ?? null;
-  }
+  }, [sessions]);
 
   function deleteSession(id: string) {
     setSessions((prev) => {
