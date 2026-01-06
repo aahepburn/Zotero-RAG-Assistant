@@ -229,7 +229,6 @@
       "fpm": [
         "--license=MIT",
         "--url=https://github.com/aahepburn/Zotero-RAG-Assistant",
-        "--description=AI-powered research assistant for Zotero",
         "--deb-field=Homepage: https://github.com/aahepburn/Zotero-RAG-Assistant",
         "--deb-field=Vcs-Git: https://github.com/aahepburn/Zotero-RAG-Assistant.git",
         "--deb-field=Vcs-Browser: https://github.com/aahepburn/Zotero-RAG-Assistant",
