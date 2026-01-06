@@ -203,7 +203,6 @@
       "icon": "build/icons",
       "category": "Office",
       "synopsis": "AI-powered research assistant for Zotero",
-      "description": "Chat with your Zotero library using AI. Get cited answers, search semantically, and manage your research with intelligent assistance.",
       "desktop": {
         "Name": "Zotero RAG Assistant",
         "Comment": "AI-powered research assistant for Zotero",
