@@ -21,8 +21,8 @@ The application can run entirely on your local machine. Your documents and queri
 - **Automatic updates**: Stay up to date with the latest features and improvements
 - **Cross-platform**: Available for macOS, Windows, and Linux
 
+<img width="1562" height="944" alt="Screenshot 2026-01-06 at 11 47 39" src="https://github.com/user-attachments/assets/5d18692f-9b94-4dbe-9838-27763adacde8" />
 
-<img width="1439" height="784" alt="Screenshot 2025-11-30 at 11 23 10 PM" src="https://github.com/user-attachments/assets/d27ea2ff-6337-48ce-8dca-0f9d11d22662" />
 
 ## Prerequisites
 
