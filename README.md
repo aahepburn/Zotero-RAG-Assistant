@@ -106,7 +106,7 @@ Download the `.deb` package from [Releases](https://github.com/aahepburn/Zotero-
 Or, run the following commands from the terminal:
 
 ```bash
-# Download the latest .deb package (amd64 or arm64)
+# Download the latest .deb package (amd64)
 wget https://github.com/aahepburn/Zotero-RAG-Assistant/releases/latest/download/ZoteroRAG-{version}-linux-amd64.deb
 
 # Install (automatically handles dependencies)
