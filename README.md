@@ -95,7 +95,15 @@ Download the latest installer from [Releases](https://github.com/aahepburn/Zoter
 
 #### Linux
 
-Download the `.deb` package from [Releases](https://github.com/aahepburn/Zotero-RAG-Assistant/releases) and install:
+First, make sure you have the necessary Python packages installed.
+
+```bash
+sudo apt install python3 python3-pip python3-venv
+```
+
+Download the `.deb` package from [Releases](https://github.com/aahepburn/Zotero-RAG-Assistant/releases) and install.
+
+Or, run the following commands from the terminal:
 
 ```bash
 # Download the latest .deb package (amd64 or arm64)
