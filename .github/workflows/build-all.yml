@@ -265,21 +265,26 @@ jobs:
           echo "Merged latest-mac.yml created"
           cat artifacts/latest-mac.yml
 
-      - name: Remove duplicate latest-mac.yml files
+      - name: Consolidate all release files
         run: |
+          mkdir -p artifacts/release
+          # Move merged yml
+          mv artifacts/latest-mac.yml artifacts/release/
+          # Move macOS installers (removing individual yml files first)
           rm -f artifacts/macos-x64-installers/latest-mac.yml
           rm -f artifacts/macos-arm64-installers/latest-mac.yml
-          echo "Removed individual architecture yml files"
+          mv artifacts/macos-x64-installers/* artifacts/release/ || true
+          mv artifacts/macos-arm64-installers/* artifacts/release/ || true
+          # Move Windows and Linux artifacts
+          mv artifacts/windows-installers/* artifacts/release/ || true
+          mv artifacts/linux-packages/* artifacts/release/ || true
+          # Show what we have
+          ls -la artifacts/release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/latest-mac.yml
-            artifacts/macos-x64-installers/*
-            artifacts/macos-arm64-installers/*
-            artifacts/windows-installers/*
-            artifacts/linux-packages/*
+          files: artifacts/release/*
           draft: false
           prerelease: false
           generate_release_notes: true
