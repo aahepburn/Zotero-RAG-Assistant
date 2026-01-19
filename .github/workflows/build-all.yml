@@ -20,7 +20,7 @@ jobs:
         include:
           - os: ubuntu-24.04
             name: linux
-          - os: macos-13  # Intel (x64)
+          - os: macos-12  # Intel (x64) - macos-13 retired
             name: macos-x64
             arch: x64
           - os: macos-14  # Apple Silicon (arm64)
