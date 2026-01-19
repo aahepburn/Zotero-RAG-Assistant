@@ -252,7 +252,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/macos-installers/*
+            artifacts/macos-x64-installers/*
+            artifacts/macos-arm64-installers/*
             artifacts/windows-installers/*
             artifacts/linux-packages/*
           draft: false
