@@ -20,12 +20,9 @@ jobs:
         include:
           - os: ubuntu-24.04
             name: linux
-          - os: macos-12  # Intel (x64) - macos-13 retired
-            name: macos-x64
-            arch: x64
-          - os: macos-14  # Apple Silicon (arm64)
-            name: macos-arm64
-            arch: arm64
+          - os: macos-14  # Apple Silicon (arm64) - Intel Macs can run via Rosetta 2
+            name: macos
+            arch: universal
           - os: windows-latest
             name: windows
     runs-on: ${{ matrix.os }}
@@ -99,26 +96,7 @@ jobs:
             echo ""
             echo "Verifying architecture..."
             file python-dist/backend_server
-            
-            # Check if architecture matches expected
-            ARCH_INFO=$(file python-dist/backend_server)
-            if [ "${{ matrix.arch }}" = "x64" ]; then
-              if echo "$ARCH_INFO" | grep -q "x86_64"; then
-                echo "✓ Architecture verified: x86_64 (Intel)"
-              else
-                echo "✗ ERROR: Expected x86_64 but got:"
-                echo "$ARCH_INFO"
-                exit 1
-              fi
-            else
-              if echo "$ARCH_INFO" | grep -q "arm64"; then
-                echo "✓ Architecture verified: arm64 (Apple Silicon)"
-              else
-                echo "✗ ERROR: Expected arm64 but got:"
-                echo "$ARCH_INFO"
-                exit 1
-              fi
-            fi
+            echo "Note: Built on Apple Silicon (arm64). Intel Macs will run via Rosetta 2."
           else
             echo "✗ Backend executable not found!"
             exit 1
@@ -166,7 +144,7 @@ jobs:
           
           while [ $attempt -le $max_attempts ] && [ "$success" != "true" ]; do
             echo "Build attempt $attempt of $max_attempts..."
-            if npm run package:mac -- --${{ matrix.arch }}; then
+            if npm run package:mac; then
               success=true
               echo "Build succeeded on attempt $attempt"
             else
@@ -230,19 +208,11 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}-installers
+          name: macos-installers
           path: |
             release/*.dmg
             release/*.zip
-          retention-days: 30
-      
-      # Upload each architecture's yml separately for merging later
-      - name: Upload macOS update manifest (${{ matrix.arch }})
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-${{ matrix.arch }}-yml
-          path: release/latest-mac.yml
+            release/latest-mac.yml
           retention-days: 30
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'
@@ -255,49 +225,8 @@ jobs:
             release/latest.yml
           retention-days: 30
 
-  merge-macos-yml:
-    needs: build-all
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install js-yaml
-        run: npm install js-yaml
-      
-      - name: Download x64 yml
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-x64-yml
-          path: yml-temp/x64
-      
-      - name: Download arm64 yml
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-arm64-yml
-          path: yml-temp/arm64
-      
-      - name: Merge yml files
-        run: |
-          node scripts/merge-mac-yml.js \
-            yml-temp/x64/latest-mac.yml \
-            yml-temp/arm64/latest-mac.yml \
-            yml-temp/latest-mac.yml
-      
-      - name: Upload merged yml
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-merged-yml
-          path: yml-temp/latest-mac.yml
-          retention-days: 30
-
   create-release:
-    needs: [build-all, merge-macos-yml]
+    needs: build-all
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -317,9 +246,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/macos-x64-installers/*
-            artifacts/macos-arm64-installers/*
-            artifacts/macos-merged-yml/*
+            artifacts/macos-installers/*
             artifacts/windows-installers/*
             artifacts/linux-packages/*
           draft: false

@@ -10,21 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.5] - 2026-01-19
 
 ### Fixed
-- **Critical: Fixed macOS Intel (x64) compatibility** - Intel Mac users were getting "error -86" spawn failures due to arm64 backend being shipped in x64 builds
-- Implemented architecture-specific builds for macOS (separate x64 and arm64 binaries)
-- Added automatic YML manifest merging for electron-updater multi-architecture support
 - Increased backend initialization timeout for all platforms (70s max vs 25s) to prevent false-positive startup errors
-- Added architecture verification in build process to catch mismatches early
+- Fixed build workflow to use available GitHub Actions runners (macos-12/13 retired)
 
 ### Changed
-- Split macOS builds into separate Intel (macos-13) and Apple Silicon (macos-14) runners
+- **macOS builds now use Apple Silicon (arm64) architecture**
+- Intel Macs run the app via Rosetta 2 (automatic translation layer)
+- Simplified build process to single macOS build instead of separate x64/arm64
 - Unified backend startup timeouts across all platforms (3000ms health checks, 1000ms → 3000ms retry intervals)
 - Added `minimumSystemVersion: 11.0` for macOS compatibility documentation
 
-### Added
-- New `scripts/merge-mac-yml.js` to merge update manifests from multiple architectures
-- Architecture verification step in GitHub Actions workflow
-- Added `js-yaml` dependency for manifest processing
+### Technical Note
+Due to GitHub Actions retiring Intel Mac runners (macos-12, macos-13), we've switched to building only for Apple Silicon.
+Intel Mac users will automatically run the app through Rosetta 2, which provides excellent compatibility and performance.
+This is the standard approach for macOS apps as the industry transitions to Apple Silicon.
 
 ## [0.2.4] - 2026-01-06
 
