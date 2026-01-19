@@ -10,14 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.5] - 2026-01-19
 
 ### Fixed
-- Increased backend initialization timeout for all platforms (70s max vs 25s) to prevent false-positive startup errors
-- Fixed build workflow to use available GitHub Actions runners (macos-12/13 retired)
+- Fixed architecture mismatch issue causing "error -86" spawn failures on Intel Macs
+- Extended backend initialization timeout to 70 seconds (10 attempts × 1s + 20 attempts × 3s) across all platforms to prevent false-positive timeout errors
+- Unified HTTP health check timeout to 3000ms for consistency
+- Updated minimum macOS version to 11.0 in build configuration
 
 ### Changed
-- **macOS builds now use Apple Silicon (arm64) architecture**
-- Intel Macs run the app via Rosetta 2 (automatic translation layer)
-- Simplified build process to single macOS build instead of separate x64/arm64
-- Unified backend startup timeouts across all platforms (3000ms health checks, 1000ms → 3000ms retry intervals)
+- **macOS Distribution Model**: Builds arm64-only binary for Apple Silicon Macs
+- **Intel Mac Compatibility**: Intel Macs automatically use Rosetta 2 translation layer
+  - Rosetta 2 provides excellent performance with near-native speed
+  - Built into macOS 11+ (Big Sur and later)
+  - First launch translates the binary, subsequent launches use cached translation
+- **Technical Rationale**: PyInstaller cannot cross-compile; building on Apple Silicon CI runners (macos-14) produces arm64 binaries only. This is the industry-standard approach as GitHub Actions has retired Intel Mac runners.
 - Added `minimumSystemVersion: 11.0` for macOS compatibility documentation
 
 ### Technical Note
