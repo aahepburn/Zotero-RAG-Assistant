@@ -20,9 +20,12 @@ jobs:
         include:
           - os: ubuntu-24.04
             name: linux
-          - os: macos-14  # Apple Silicon (arm64) - Intel Macs can run via Rosetta 2
+          - os: macos-15-intel  # Intel x64
             name: macos
-            arch: universal
+            arch: x64
+          - os: macos-14  # Apple Silicon arm64
+            name: macos
+            arch: arm64
           - os: windows-latest
             name: windows
     runs-on: ${{ matrix.os }}
@@ -55,8 +58,11 @@ jobs:
           python3 -m pip install -r requirements.txt
           
           # Build PyInstaller bundle (will build for native architecture of runner)
-          echo "Building for ${{ matrix.arch }} on $(uname -m)"
+          echo "Building for ${{ matrix.arch }} architecture on $(uname -m) runner"
           pyinstaller --clean --noconfirm backend_bundle.spec
+          
+          # Verify architecture
+          file python-dist/backend_server | head -1
           
           # Move PyInstaller output to python-dist
           if [ -d "dist/backend_bundle" ]; then
@@ -143,8 +149,8 @@ jobs:
           success=false
           
           while [ $attempt -le $max_attempts ] && [ "$success" != "true" ]; do
-            echo "Build attempt $attempt of $max_attempts..."
-            if npm run package:mac; then
+            echo "Build attempt $attempt of $max_attempts for ${{ matrix.arch }}..."
+            if npm run package:mac -- --${{ matrix.arch }}; then
               success=true
               echo "Build succeeded on attempt $attempt"
             else
@@ -208,7 +214,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-installers
+          name: macos-${{ matrix.arch }}-installers
           path: |
             release/*.dmg
             release/*.zip

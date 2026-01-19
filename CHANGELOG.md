@@ -16,12 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated minimum macOS version to 11.0 in build configuration
 
 ### Changed
-- **macOS Distribution Model**: Builds arm64-only binary for Apple Silicon Macs
-- **Intel Mac Compatibility**: Intel Macs automatically use Rosetta 2 translation layer
-  - Rosetta 2 provides excellent performance with near-native speed
-  - Built into macOS 11+ (Big Sur and later)
-  - First launch translates the binary, subsequent launches use cached translation
-- **Technical Rationale**: PyInstaller cannot cross-compile; building on Apple Silicon CI runners (macos-14) produces arm64 binaries only. This is the industry-standard approach as GitHub Actions has retired Intel Mac runners.
+- **macOS Native Builds**: Now building separate native binaries for both architectures:
+  - **x64 (Intel)**: Built on `macos-15-intel` runner - native performance on Intel Macs
+  - **arm64 (Apple Silicon)**: Built on `macos-14` runner - native performance on M1/M2/M3/M4 Macs
+- **Technical Implementation**: Uses GitHub Actions matrix strategy with architecture-specific runners
+  - Each architecture builds natively (no cross-compilation)
+  - PyInstaller produces optimized binaries for host architecture
+  - Separate DMG/ZIP files for each architecture
+- **Distribution**: Users download the appropriate installer for their Mac's architecture
 - Added `minimumSystemVersion: 11.0` for macOS compatibility documentation
 
 ### Technical Note
