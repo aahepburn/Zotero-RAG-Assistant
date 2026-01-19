@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-01-19
+
+### Fixed
+- **Critical: Fixed macOS Intel (x64) compatibility** - Intel Mac users were getting "error -86" spawn failures due to arm64 backend being shipped in x64 builds
+- Implemented architecture-specific builds for macOS (separate x64 and arm64 binaries)
+- Added automatic YML manifest merging for electron-updater multi-architecture support
+- Increased backend initialization timeout for all platforms (70s max vs 25s) to prevent false-positive startup errors
+- Added architecture verification in build process to catch mismatches early
+
+### Changed
+- Split macOS builds into separate Intel (macos-13) and Apple Silicon (macos-14) runners
+- Unified backend startup timeouts across all platforms (3000ms health checks, 1000ms → 3000ms retry intervals)
+- Added `minimumSystemVersion: 11.0` for macOS compatibility documentation
+
+### Added
+- New `scripts/merge-mac-yml.js` to merge update manifests from multiple architectures
+- Architecture verification step in GitHub Actions workflow
+- Added `js-yaml` dependency for manifest processing
+
 ## [0.2.4] - 2026-01-06
 
 ### Changed

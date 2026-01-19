@@ -6,6 +6,25 @@ This document describes the automatic update system implemented in Zotero RAG As
 
 The application uses Electron's `electron-updater` module to provide seamless automatic updates from GitHub Releases. Users can check for updates, download them, and install them directly from the Settings page.
 
+## Multi-Architecture Support (macOS)
+
+For macOS, the app supports both Intel (x64) and Apple Silicon (arm64) architectures:
+- Each architecture has its own PyInstaller backend bundle
+- GitHub Actions builds both architectures separately on `macos-13` (Intel) and `macos-14` (ARM)
+- The workflow merges update manifests to ensure electron-updater can find the correct architecture
+- Users automatically receive updates matching their system architecture
+
+### How It Works
+
+1. **Separate Builds**: Each architecture is built on its native runner to ensure correct binary architecture
+2. **Manifest Merging**: After builds complete, `scripts/merge-mac-yml.js` combines both `latest-mac.yml` files
+3. **Smart Downloads**: electron-updater reads the merged manifest and downloads the appropriate architecture based on `process.arch`
+
+This ensures that:
+- Intel Mac users get x64 binaries (no "error -86" spawn failures)
+- Apple Silicon users get native arm64 binaries (optimal performance)
+- Auto-updates work correctly for both architectures
+
 ## Architecture
 
 ### Components

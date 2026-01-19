@@ -17,7 +17,17 @@ jobs:
   build-all:
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            name: linux
+          - os: macos-13  # Intel (x64)
+            name: macos-x64
+            arch: x64
+          - os: macos-14  # Apple Silicon (arm64)
+            name: macos-arm64
+            arch: arm64
+          - os: windows-latest
+            name: windows
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -46,6 +56,9 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install pyinstaller
           python3 -m pip install -r requirements.txt
+          
+          # Build PyInstaller bundle (will build for native architecture of runner)
+          echo "Building for ${{ matrix.arch }} on $(uname -m)"
           pyinstaller --clean --noconfirm backend_bundle.spec
           
           # Move PyInstaller output to python-dist
@@ -79,10 +92,35 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           if [ -f "python-dist/backend_server" ]; then
-            echo "Backend executable created successfully"
+            echo "✓ Backend executable created successfully"
             ls -lh python-dist/ | head -10
+            
+            # Verify architecture
+            echo ""
+            echo "Verifying architecture..."
+            file python-dist/backend_server
+            
+            # Check if architecture matches expected
+            ARCH_INFO=$(file python-dist/backend_server)
+            if [ "${{ matrix.arch }}" = "x64" ]; then
+              if echo "$ARCH_INFO" | grep -q "x86_64"; then
+                echo "✓ Architecture verified: x86_64 (Intel)"
+              else
+                echo "✗ ERROR: Expected x86_64 but got:"
+                echo "$ARCH_INFO"
+                exit 1
+              fi
+            else
+              if echo "$ARCH_INFO" | grep -q "arm64"; then
+                echo "✓ Architecture verified: arm64 (Apple Silicon)"
+              else
+                echo "✗ ERROR: Expected arm64 but got:"
+                echo "$ARCH_INFO"
+                exit 1
+              fi
+            fi
           else
-            echo "Backend executable not found!"
+            echo "✗ Backend executable not found!"
             exit 1
           fi
       
@@ -128,7 +166,7 @@ jobs:
           
           while [ $attempt -le $max_attempts ] && [ "$success" != "true" ]; do
             echo "Build attempt $attempt of $max_attempts..."
-            if npm run package:mac; then
+            if npm run package:mac -- --${{ matrix.arch }}; then
               success=true
               echo "Build succeeded on attempt $attempt"
             else
@@ -192,11 +230,19 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-installers
+          name: macos-${{ matrix.arch }}-installers
           path: |
             release/*.dmg
             release/*.zip
-            release/latest-mac.yml
+          retention-days: 30
+      
+      # Upload each architecture's yml separately for merging later
+      - name: Upload macOS update manifest (${{ matrix.arch }})
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-yml
+          path: release/latest-mac.yml
           retention-days: 30
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'
@@ -209,8 +255,49 @@ jobs:
             release/latest.yml
           retention-days: 30
 
-  create-release:
+  merge-macos-yml:
     needs: build-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install js-yaml
+        run: npm install js-yaml
+      
+      - name: Download x64 yml
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-x64-yml
+          path: yml-temp/x64
+      
+      - name: Download arm64 yml
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm64-yml
+          path: yml-temp/arm64
+      
+      - name: Merge yml files
+        run: |
+          node scripts/merge-mac-yml.js \
+            yml-temp/x64/latest-mac.yml \
+            yml-temp/arm64/latest-mac.yml \
+            yml-temp/latest-mac.yml
+      
+      - name: Upload merged yml
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-merged-yml
+          path: yml-temp/latest-mac.yml
+          retention-days: 30
+
+  create-release:
+    needs: [build-all, merge-macos-yml]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -230,7 +317,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/macos-installers/*
+            artifacts/macos-x64-installers/*
+            artifacts/macos-arm64-installers/*
+            artifacts/macos-merged-yml/*
             artifacts/windows-installers/*
             artifacts/linux-packages/*
           draft: false

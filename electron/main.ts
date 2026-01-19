@@ -39,6 +39,95 @@ function generateAuthToken(): string {
 }
 
 /**
+ * Create a loading window to show progress during long operations
+ */
+function createLoadingWindow(message: string = 'Loading...'): BrowserWindow {
+  const loadingWindow = new BrowserWindow({
+    width: 400,
+    height: 200,
+    frame: false,
+    transparent: false,
+    resizable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    },
+    show: false
+  });
+
+  // Create simple HTML content for loading window
+  const loadingHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+        }
+        .spinner {
+          border: 4px solid rgba(255, 255, 255, 0.3);
+          border-top: 4px solid white;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin-bottom: 20px;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .message {
+          font-size: 16px;
+          text-align: center;
+          padding: 0 20px;
+        }
+        .progress {
+          font-size: 14px;
+          opacity: 0.8;
+          margin-top: 10px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="spinner"></div>
+      <div class="message" id="message">${message}</div>
+      <div class="progress" id="progress"></div>
+    </body>
+    </html>
+  `;
+
+  loadingWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHtml)}`);
+  loadingWindow.once('ready-to-show', () => {
+    loadingWindow.show();
+  });
+
+  return loadingWindow;
+}
+
+/**
+ * Update loading window message
+ */
+function updateLoadingWindow(loadingWindow: BrowserWindow | null, message: string, progress?: number): void {
+  if (!loadingWindow || loadingWindow.isDestroyed()) return;
+  
+  const progressText = progress !== undefined ? `${progress}%` : '';
+  loadingWindow.webContents.executeJavaScript(`
+    document.getElementById('message').textContent = ${JSON.stringify(message)};
+    document.getElementById('progress').textContent = ${JSON.stringify(progressText)};
+  `).catch(() => {});
+}
+
+/**
  * Check if a port is available
  */
 function isPortAvailable(port: number): Promise<boolean> {
@@ -477,12 +566,32 @@ async function setupLinuxVenv(onProgress?: (message: string, progress?: number) 
     return { pythonPath: pythonBin, venvPath };
   } catch (error) {
     console.error('✗ Linux venv setup failed:', error);
-    if (mainWindow) {
-      dialog.showErrorBox(
-        'Setup Failed',
-        `Failed to set up Python environment:\n\n${error}\n\nPlease check the console for details.`
-      );
+    
+    // Provide detailed error message
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    let userMessage = 'Failed to set up Python environment.\n\n';
+    
+    // Provide specific guidance based on error
+    if (errorMsg.includes('venv creation failed') || errorMsg.includes('No module named venv')) {
+      userMessage += 'Python venv module is missing.\n\n' +
+        'Install it with:\n' +
+        '  sudo apt install python3-venv\n\n';
+    } else if (errorMsg.includes('pip upgrade failed') || errorMsg.includes('Dependency installation failed')) {
+      userMessage += 'Failed to install required Python packages.\n\n' +
+        'This may be due to:\n' +
+        '  - Network connectivity issues\n' +
+        '  - Missing build tools\n\n' +
+        'Try installing build essentials:\n' +
+        '  sudo apt install build-essential python3-dev\n\n';
+    } else {
+      userMessage += 'Please ensure Python 3.8+ is installed:\n' +
+        '  sudo apt install python3 python3-pip python3-venv\n\n';
     }
+    
+    userMessage += `Error details: ${errorMsg}\n\n` +
+      'Check the console logs for more information.';
+    
+    dialog.showErrorBox('Python Environment Setup Failed', userMessage);
     return null;
   }
 }
@@ -522,7 +631,25 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
     // Linux: Use venv approach (smaller packages, uses system Python)
     if (process.platform === 'linux') {
       console.log('Production mode (Linux): Setting up virtual environment...');
-      const venvSetup = await setupLinuxVenv();
+      
+      // Create loading window for venv setup
+      let loadingWindow: BrowserWindow | null = null;
+      try {
+        loadingWindow = createLoadingWindow('Checking Python environment...');
+      } catch (e) {
+        console.warn('Failed to create loading window:', e);
+      }
+      
+      const venvSetup = await setupLinuxVenv((message: string, progress?: number) => {
+        console.log(`[Setup Progress] ${message} ${progress !== undefined ? `(${progress}%)` : ''}`);
+        updateLoadingWindow(loadingWindow, message, progress);
+      });
+      
+      // Close loading window
+      if (loadingWindow && !loadingWindow.isDestroyed()) {
+        loadingWindow.close();
+        loadingWindow = null;
+      }
       
       if (!venvSetup) {
         console.error('================================================================================');
@@ -531,6 +658,17 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
         console.error('  Please ensure Python 3.8+ is installed:');
         console.error('    sudo apt install python3 python3-pip python3-venv');
         console.error('================================================================================');
+        
+        // Show detailed error dialog
+        dialog.showErrorBox(
+          'Python Environment Setup Failed',
+          'Failed to set up the Python environment required to run this application.\n\n' +
+          'Required: Python 3.8 or later with venv support\n\n' +
+          'Please install:\n' +
+          '  sudo apt install python3 python3-pip python3-venv\n\n' +
+          'Then restart the application.\n\n' +
+          'If Python is already installed, check the console logs for specific errors.'
+        );
         return null;
       }
       
@@ -600,7 +738,10 @@ async function waitForBackend(maxRetries = 30, delayMs = 1000): Promise<boolean>
   
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const response = await axios.get(`${BACKEND_URL}/health`, { timeout: 1000 });
+      // Use generous timeout as connections can be slower on first startup
+      // especially with indexing or slow disk I/O
+      const timeout = 3000;
+      const response = await axios.get(`${BACKEND_URL}/health`, { timeout });
       
       if (response.status === 200) {
         const healthData = response.data;
@@ -897,9 +1038,16 @@ async function startBackend(): Promise<boolean> {
       
       // If backend crashes unexpectedly after startup, notify user
       if (code !== 0 && code !== null && mainWindow && !mainWindow.isDestroyed()) {
+        const recentErrors = backendErrors.slice(-5).join('\n').substring(0, 300);
         dialog.showErrorBox(
           'Backend Crashed',
-          `The backend process exited unexpectedly (code: ${code}).\n\nCheck the console logs for details. Recent errors:\n\n${backendErrors.slice(-5).join('\n')}`
+          `The backend process exited unexpectedly (exit code: ${code}).\n\n` +
+          `This may be due to:\n` +
+          `  - Missing Python dependencies\n` +
+          `  - Corrupted virtual environment\n` +
+          `  - File permission issues\n\n` +
+          `Check the console logs for details.\n\n` +
+          `Recent errors:\n${recentErrors}`
         );
       }
     });
@@ -919,17 +1067,45 @@ async function startBackend(): Promise<boolean> {
       console.error(`  Output (${backendOutput.length} lines):\n    ${backendOutput.join('\n    ')}`);
       console.error(`  Errors (${backendErrors.length} lines):\n    ${backendErrors.join('\n    ')}`);
       console.error('================================================================================');
+      
+      // Provide helpful error message to user
+      let errorSummary = 'The backend process failed to start.\n\n';
+      
+      // Try to identify the issue from stderr
+      const stderrText = backendErrors.join('\n').toLowerCase();
+      if (stderrText.includes('modulenotfounderror') || stderrText.includes('no module named')) {
+        errorSummary += 'Issue: Missing Python dependencies\n\n' +
+          'On Linux, dependencies should be automatically installed.\n' +
+          'Try removing the virtual environment and restarting:\n\n' +
+          '  rm -rf ~/.config/zotero-rag-assistant/venv\n\n';
+      } else if (stderrText.includes('permission denied') || stderrText.includes('errno 13')) {
+        errorSummary += 'Issue: File permission problem\n\n' +
+          'Check that the application has permission to:\n' +
+          '  - Read/execute Python files\n' +
+          '  - Write to ~/.config/zotero-rag-assistant/\n\n';
+      } else if (stderrText.includes('address already in use') || stderrText.includes('errno 98')) {
+        errorSummary += 'Issue: Port 8000 is already in use\n\n' +
+          'Another application is using the required port.\n' +
+          'Try closing other applications and restarting.\n\n';
+      } else {
+        errorSummary += 'Review the error output below and console logs.\n\n';
+      }
+      
+      errorSummary += `Error output:\n${backendErrors.slice(0, 10).join('\n').substring(0, 500)}`;
+      
+      dialog.showErrorBox('Backend Startup Failed', errorSummary);
       return false;
     }
     
     console.log('✓ Process survived initial startup, checking health endpoint...');
     
     // Wait for backend to be ready with retry logic
-    // Try quick checks first (500ms delay), then slower checks (2s delay)
-    let isReady = await waitForBackend(10, 500);
+    // Use generous timeouts as initialization can be slow (especially on first run with indexing)
+    // Try moderate checks first (1000ms delay), then slower checks (3000ms delay)
+    let isReady = await waitForBackend(10, 1000);
     if (!isReady) {
-      console.log('Quick startup failed, trying longer intervals...');
-      isReady = await waitForBackend(10, 2000);
+      console.log('Initial startup phase incomplete, continuing with longer intervals (3000ms)...');
+      isReady = await waitForBackend(20, 3000);  // Give plenty of time for initialization
       
       // If still not ready, dump comprehensive diagnostics
       if (!isReady) {
@@ -942,6 +1118,24 @@ async function startBackend(): Promise<boolean> {
         console.error(`  All stdout (${backendOutput.length} lines):\n    ${backendOutput.join('\n    ')}`);
         console.error(`  All stderr (${backendErrors.length} lines):\n    ${backendErrors.join('\n    ')}`);
         console.error('================================================================================');
+        
+        // Show helpful error to user
+        const allErrors = backendErrors.join('\n');
+        let errorMessage = 'The backend service failed to start within the timeout period.\n\n';
+        
+        if (backendProcess && !backendProcess.killed && backendProcess.exitCode === null) {
+          errorMessage += 'The process is still running but not responding.\n\n' +
+            'Possible causes:\n' +
+            '  - Backend is stuck during initialization\n' +
+            '  - Firewall blocking localhost connections\n' +
+            '  - Database or file system issues\n\n';
+        } else {
+          errorMessage += 'The process has stopped or crashed.\n\n';
+        }
+        
+        errorMessage += `Recent errors:\n${allErrors.substring(allErrors.length - 400)}`;
+        
+        dialog.showErrorBox('Backend Failed to Start', errorMessage);
       }
     }
     
@@ -1200,7 +1394,9 @@ function setupIpcHandlers(): void {
   // Check if backend is healthy
   ipcMain.handle('check-backend-health', async () => {
     try {
-      const response = await axios.get(`${BACKEND_URL}/`, { timeout: 2000 });
+      // Use generous timeout for consistency with startup health checks
+      const timeout = 3000;
+      const response = await axios.get(`${BACKEND_URL}/`, { timeout });
       return { healthy: true, status: response.status };
     } catch (error) {
       return { healthy: false, error: error instanceof Error ? error.message : String(error) };

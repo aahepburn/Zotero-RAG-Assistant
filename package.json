@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "ZoteroRAG",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -45,6 +45,7 @@
     "electron": "^39.2.4",
     "electron-builder": "^24.9.0",
     "electron-icon-builder": "^2.0.1",
+    "js-yaml": "^4.1.0",
     "png2icons": "^2.0.1",
     "sharp": "^0.34.5",
     "typescript": "^5.3.0",
@@ -98,6 +99,7 @@
         }
       ],
       "category": "public.app-category.productivity",
+      "minimumSystemVersion": "11.0",
       "target": [
         {
           "target": "dmg",

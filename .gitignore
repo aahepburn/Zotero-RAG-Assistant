@@ -37,6 +37,10 @@ dist/
 release/
 electron/node_modules/
 
+# Test files
+test-*.yml
+merged.yml
+
 # Build artifacts
 *.app
 *.dmg
