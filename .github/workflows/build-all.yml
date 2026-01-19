@@ -248,10 +248,34 @@ jobs:
       - name: Display structure
         run: ls -R artifacts
 
+      - name: Setup Node.js for merge script
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install js-yaml
+        run: npm install js-yaml
+
+      - name: Merge macOS update manifests
+        run: |
+          node scripts/merge-mac-yml.js \
+            artifacts/macos-x64-installers/latest-mac.yml \
+            artifacts/macos-arm64-installers/latest-mac.yml \
+            artifacts/latest-mac.yml
+          echo "Merged latest-mac.yml created"
+          cat artifacts/latest-mac.yml
+
+      - name: Remove duplicate latest-mac.yml files
+        run: |
+          rm -f artifacts/macos-x64-installers/latest-mac.yml
+          rm -f artifacts/macos-arm64-installers/latest-mac.yml
+          echo "Removed individual architecture yml files"
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
+            artifacts/latest-mac.yml
             artifacts/macos-x64-installers/*
             artifacts/macos-arm64-installers/*
             artifacts/windows-installers/*
