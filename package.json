@@ -155,8 +155,7 @@
         "width": 600,
         "height": 500
       },
-      "backgroundColor": "#f5f5f5",
-      "icon": "build/icon.icns"
+      "backgroundColor": "#f5f5f5"
     },
     "win": {
       "extraResources": [
