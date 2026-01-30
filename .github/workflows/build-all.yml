@@ -63,7 +63,9 @@ jobs:
           if [ "$(uname -m)" = "x86_64" ]; then
             echo "Intel Mac detected - using PyTorch 2.2.2 for x64 compatibility"
             python3 -m pip install torch==2.2.2
-            python3 -m pip install -r requirements.txt
+            # Install requirements but skip torch (already installed)
+            grep -v "^torch" requirements.txt > requirements-no-torch.txt
+            python3 -m pip install -r requirements-no-torch.txt
           else
             echo "Apple Silicon detected - using standard requirements"
             python3 -m pip install -r requirements.txt
