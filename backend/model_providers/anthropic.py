@@ -8,7 +8,9 @@ Claude 3 family of models.
 from typing import Dict, Any, List
 from .base import (
     BaseProvider, Message, ChatResponse, ModelInfo,
-    ProviderError, ProviderAuthenticationError, ProviderConnectionError
+    ProviderError, ProviderAuthenticationError, ProviderConnectionError,
+    ProviderRateLimitError, ProviderContextError,
+    MessageAdapter, ParameterMapper
 )
 
 
@@ -114,33 +116,26 @@ class AnthropicProvider(BaseProvider):
         try:
             client = self._get_client(credentials)
             
-            # Anthropic requires system messages to be separate
-            system_message = None
-            conversation_messages = []
-            
-            for msg in messages:
-                if msg.role == "system":
-                    system_message = msg.content
-                else:
-                    conversation_messages.append({
-                        "role": msg.role,
-                        "content": msg.content
-                    })
+            # Use MessageAdapter for Anthropic-specific format
+            system_message, conversation_messages = MessageAdapter.to_anthropic(messages)
             
             # Ensure we have at least one user message
             if not conversation_messages:
                 raise ProviderError("At least one non-system message is required")
             
-            # Make the API call with 2025 best practices for academic RAG
-            # top_p: 0.9 for nucleus sampling (prevents low-prob hallucinations)
+            # Map standard parameters to Anthropic equivalents
+            mapped_params = ParameterMapper.map_params(kwargs, self.id)
+            
+
+            # top_p: 0.9 for nucleus sampling
             # top_k: 50 for vocabulary diversity in technical language
             request_params = {
                 "model": model,
                 "messages": conversation_messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                "top_p": kwargs.get("top_p", 0.9),
-                "top_k": kwargs.get("top_k", 50),
+                "top_p": mapped_params.get("top_p", 0.9),
+                "top_k": mapped_params.get("top_k", 50),
             }
             
             if system_message:
@@ -178,8 +173,8 @@ class AnthropicProvider(BaseProvider):
             if "authentication" in error_msg or "api key" in error_msg:
                 raise ProviderAuthenticationError(f"Anthropic authentication failed: {str(e)}")
             elif "rate limit" in error_msg:
-                raise ProviderError(f"Anthropic rate limit exceeded: {str(e)}")
+                raise ProviderRateLimitError(f"Anthropic rate limit exceeded: {str(e)}")
             elif "context" in error_msg or "maximum" in error_msg:
-                raise ProviderError(f"Context too long for model {model}: {str(e)}")
+                raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
             else:
                 raise ProviderError(f"Anthropic chat failed: {str(e)}")

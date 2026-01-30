@@ -312,7 +312,7 @@ async def shutdown():
     def delayed_shutdown():
         """Shutdown after a brief delay to allow response to be sent"""
         import time
-        time.sleep(0.5)  # Give time for response to be sent
+        time.sleep(2.0)  # FIX: Increased from 0.5s for reliable response + uvicorn cleanup
         os.kill(os.getpid(), signal.SIGTERM)
     
     # Start shutdown in background thread

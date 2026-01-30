@@ -7,7 +7,9 @@ These providers use OpenAI-compatible APIs or their own SDKs.
 from typing import Dict, Any, List
 from .base import (
     BaseProvider, Message, ChatResponse, ModelInfo,
-    ProviderError, ProviderAuthenticationError, ProviderConnectionError
+    ProviderError, ProviderAuthenticationError, ProviderConnectionError,
+    ProviderRateLimitError, ProviderContextError,
+    MessageAdapter, ParameterMapper
 )
 
 
@@ -76,6 +78,24 @@ class PerplexityProvider(BaseProvider):
                 description="Advanced reasoning with web search",
                 context_length=127072
             ),
+            ModelInfo(
+                id="llama-3.1-sonar-small-128k-online",
+                name="Llama 3.1 Sonar Small (Online)",
+                description="Fast model with web search",
+                context_length=127072
+            ),
+            ModelInfo(
+                id="llama-3.1-sonar-large-128k-online",
+                name="Llama 3.1 Sonar Large (Online)",
+                description="Powerful model with web search",
+                context_length=127072
+            ),
+            ModelInfo(
+                id="llama-3.1-sonar-huge-128k-online",
+                name="Llama 3.1 Sonar Huge (Online)",
+                description="Most powerful model with web search",
+                context_length=127072
+            ),
         ]
     
     def chat(
@@ -91,19 +111,34 @@ class PerplexityProvider(BaseProvider):
         try:
             client = self._get_client(credentials)
             
-            openai_messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in messages
-            ]
+            # Use MessageAdapter for OpenAI-compatible format
+            openai_messages = MessageAdapter.to_openai(messages)
+            
+            # Map standard parameters to Perplexity equivalents
+            mapped_params = ParameterMapper.map_params(kwargs, self.id)
             
             # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
+            # Perplexity-specific parameters must go in extra_body when using OpenAI client
+            extra_body = {}
+            
+            # Disable search features to prevent returning web snippets instead of answers
+            # These are Perplexity-specific params documented at:
+            # https://docs.perplexity.ai/guides/chat-completions-guide
+            if kwargs.get("disable_search", True):  # Default to disabling search for RAG use case
+                extra_body["search_domain_filter"] = []  # Empty list disables domain filtering
+                extra_body["return_images"] = False
+                extra_body["return_related_questions"] = False
+                # Note: search_recency_filter and return_citations are left unset
+                # return_citations is NOT a documented parameter
+            
             response = client.chat.completions.create(
                 model=model,
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                top_p=kwargs.get("top_p", 0.9),
-                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
+                top_p=mapped_params.get("top_p", 0.9),
+                frequency_penalty=mapped_params.get("frequency_penalty", 0.3),
+                extra_body=extra_body if extra_body else None,
             )
             
             content = response.choices[0].message.content or ""
@@ -123,6 +158,11 @@ class PerplexityProvider(BaseProvider):
                 raw=response.model_dump() if hasattr(response, 'model_dump') else None
             )
         except Exception as e:
+            error_msg = str(e).lower()
+            if "rate limit" in error_msg:
+                raise ProviderRateLimitError(f"Perplexity rate limit exceeded: {str(e)}")
+            elif "context" in error_msg or "maximum" in error_msg:
+                raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
             raise ProviderError(f"Perplexity chat failed: {str(e)}")
 
 
@@ -133,7 +173,7 @@ class GoogleProvider(BaseProvider):
         super().__init__(
             id="google",
             label="Google",
-            default_model="gemini-1.5-pro",
+            default_model="gemini-1.5-pro-latest",
             supports_streaming=True,
             requires_api_key=True,
         )
@@ -151,6 +191,10 @@ class GoogleProvider(BaseProvider):
         api_key = credentials.get("api_key")
         if not api_key:
             raise ProviderAuthenticationError("Google API key is required")
+        
+        # Log SDK version for debugging
+        print(f"[Google Provider] Using google-generativeai version: {genai.__version__ if hasattr(genai, '__version__') else 'unknown'}")
+        print(f"[Google Provider] API key present: {bool(api_key)} (length: {len(api_key) if api_key else 0})")
         
         genai.configure(api_key=api_key)
         return genai
@@ -170,17 +214,31 @@ class GoogleProvider(BaseProvider):
     
     def list_models(self, credentials: Dict[str, Any]) -> List[ModelInfo]:
         """List available Google models."""
+        # Note: Model names like 'gemini-1.5-pro-latest' are valid
+        # The SDK automatically adds 'models/' prefix internally
         return [
             ModelInfo(
+                id="gemini-1.5-pro-latest",
+                name="Gemini 1.5 Pro (Latest)",
+                description="Most capable model, auto-updated",
+                context_length=2000000
+            ),
+            ModelInfo(
+                id="gemini-1.5-flash-latest",
+                name="Gemini 1.5 Flash (Latest)",
+                description="Fast and efficient, auto-updated",
+                context_length=1000000
+            ),
+            ModelInfo(
                 id="gemini-1.5-pro",
-                name="Gemini 1.5 Pro",
-                description="Most capable model",
+                name="Gemini 1.5 Pro (Stable)",
+                description="Stable version, not auto-updated",
                 context_length=2000000
             ),
             ModelInfo(
                 id="gemini-1.5-flash",
-                name="Gemini 1.5 Flash",
-                description="Fast and efficient",
+                name="Gemini 1.5 Flash (Stable)",
+                description="Fast stable version",
                 context_length=1000000
             ),
             ModelInfo(
@@ -188,6 +246,12 @@ class GoogleProvider(BaseProvider):
                 name="Gemini 2.0 Flash (Experimental)",
                 description="Latest experimental model",
                 context_length=1000000
+            ),
+            ModelInfo(
+                id="gemini-pro",
+                name="Gemini Pro (Legacy)",
+                description="Earlier Gemini model",
+                context_length=32000
             ),
         ]
     
@@ -204,35 +268,87 @@ class GoogleProvider(BaseProvider):
         try:
             genai = self._get_client(credentials)
             
-            # Create model instance
-            model_instance = genai.GenerativeModel(model)
+            # Use MessageAdapter for Gemini-specific format
+            system_instruction, gemini_history = MessageAdapter.to_gemini(messages)
             
-            # Convert messages to Gemini format (combines into single prompt)
-            # Gemini uses a simpler format - we'll concatenate messages
-            prompt_parts = []
-            for msg in messages:
-                if msg.role == "system":
-                    prompt_parts.append(f"Instructions: {msg.content}")
-                elif msg.role == "user":
-                    prompt_parts.append(f"User: {msg.content}")
-                elif msg.role == "assistant":
-                    prompt_parts.append(f"Assistant: {msg.content}")
+            # Map standard parameters to Google equivalents
+            mapped_params = ParameterMapper.map_params(kwargs, self.id)
             
-            prompt = "\n\n".join(prompt_parts)
+            # Configure safety settings to prevent over-blocking
+            safety_settings = [
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE"
+                },
+            ]
             
-            # Generate content
-            response = model_instance.generate_content(
-                prompt,
-                generation_config={
-                    "temperature": temperature,
-                    "max_output_tokens": max_tokens,
-                    "top_p": kwargs.get("top_p", 0.95),
-                }
-            )
+            # Create model instance with system instruction
+            print(f"[Google Provider] Creating GenerativeModel with model='{model}'")
+            print(f"[Google Provider] System instruction length: {len(system_instruction) if system_instruction else 0}")
             
-            content = response.text if hasattr(response, 'text') else ""
+            try:
+                model_instance = genai.GenerativeModel(
+                    model,
+                    system_instruction=system_instruction,
+                    safety_settings=safety_settings
+                )
+                print(f"[Google Provider] Model instance created successfully")
+            except Exception as model_error:
+                print(f"[Google Provider] ERROR creating model: {type(model_error).__name__}: {model_error}")
+                raise
             
-            # Google doesn't provide detailed usage in the same format
+            # Use adapted Gemini message format
+            # Gemini expects alternating user/model turns in chat history
+            if len(gemini_history) == 1 and gemini_history[0]["role"] == "user":
+                # Single turn - use generate_content
+                response = model_instance.generate_content(
+                    gemini_history[0]["parts"][0],
+                    generation_config={
+                        "temperature": temperature,
+                        "max_output_tokens": max_tokens,
+                        "top_p": mapped_params.get("top_p", 0.95),
+                        "top_k": mapped_params.get("top_k", 40),
+                    }
+                )
+            else:
+                # Multi-turn - use chat with history
+                chat = model_instance.start_chat(history=gemini_history[:-1])
+                response = chat.send_message(
+                    gemini_history[-1]["parts"][0],
+                    generation_config={
+                        "temperature": temperature,
+                        "max_output_tokens": max_tokens,
+                        "top_p": mapped_params.get("top_p", 0.95),
+                        "top_k": mapped_params.get("top_k", 40),
+                    }
+                )
+            
+            # Extract text from response
+            content = ""
+            if hasattr(response, 'text'):
+                content = response.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                # Extract from candidates if text attribute not available
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    content = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+            
+            if not content:
+                raise ProviderError("No content in Google Gemini response")
+            
+            # Google usage metadata
             usage = None
             if hasattr(response, 'usage_metadata'):
                 usage = {
@@ -248,7 +364,16 @@ class GoogleProvider(BaseProvider):
                 raw=None  # Can't easily serialize Gemini response
             )
         except Exception as e:
-            raise ProviderError(f"Google Gemini chat failed: {str(e)}")
+            # Provide more detailed error information
+            error_msg = str(e)
+            if hasattr(e, 'message'):
+                error_msg = e.message
+            error_msg_lower = error_msg.lower()
+            if "rate limit" in error_msg_lower or "quota" in error_msg_lower:
+                raise ProviderRateLimitError(f"Google Gemini rate limit exceeded: {error_msg}")
+            elif "context" in error_msg_lower or "token" in error_msg_lower:
+                raise ProviderContextError(f"Context too long for model {model}: {error_msg}")
+            raise ProviderError(f"Google Gemini chat failed: {error_msg}")
 
 
 class GroqProvider(BaseProvider):
@@ -341,10 +466,11 @@ class GroqProvider(BaseProvider):
         try:
             client = self._get_client(credentials)
             
-            openai_messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in messages
-            ]
+            # Use MessageAdapter for OpenAI-compatible format
+            openai_messages = MessageAdapter.to_openai(messages)
+            
+            # Map standard parameters to Groq equivalents
+            mapped_params = ParameterMapper.map_params(kwargs, self.id)
             
             # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
             response = client.chat.completions.create(
@@ -352,8 +478,8 @@ class GroqProvider(BaseProvider):
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                top_p=kwargs.get("top_p", 0.9),
-                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
+                top_p=mapped_params.get("top_p", 0.9),
+                frequency_penalty=mapped_params.get("frequency_penalty", 0.3),
             )
             
             content = response.choices[0].message.content or ""
@@ -373,6 +499,11 @@ class GroqProvider(BaseProvider):
                 raw=response.model_dump() if hasattr(response, 'model_dump') else None
             )
         except Exception as e:
+            error_msg = str(e).lower()
+            if "rate limit" in error_msg:
+                raise ProviderRateLimitError(f"Groq rate limit exceeded: {str(e)}")
+            elif "context" in error_msg or "maximum" in error_msg:
+                raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
             raise ProviderError(f"Groq chat failed: {str(e)}")
 
 
@@ -467,10 +598,11 @@ class OpenRouterProvider(BaseProvider):
         try:
             client = self._get_client(credentials)
             
-            openai_messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in messages
-            ]
+            # Use MessageAdapter for OpenAI-compatible format
+            openai_messages = MessageAdapter.to_openai(messages)
+            
+            # Map standard parameters to OpenRouter equivalents
+            mapped_params = ParameterMapper.map_params(kwargs, self.id)
             
             # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
             response = client.chat.completions.create(
@@ -478,8 +610,8 @@ class OpenRouterProvider(BaseProvider):
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                top_p=kwargs.get("top_p", 0.9),
-                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
+                top_p=mapped_params.get("top_p", 0.9),
+                frequency_penalty=mapped_params.get("frequency_penalty", 0.3),
             )
             
             content = response.choices[0].message.content or ""
@@ -499,4 +631,9 @@ class OpenRouterProvider(BaseProvider):
                 raw=response.model_dump() if hasattr(response, 'model_dump') else None
             )
         except Exception as e:
+            error_msg = str(e).lower()
+            if "rate limit" in error_msg:
+                raise ProviderRateLimitError(f"OpenRouter rate limit exceeded: {str(e)}")
+            elif "context" in error_msg or "maximum" in error_msg:
+                raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
             raise ProviderError(f"OpenRouter chat failed: {str(e)}")

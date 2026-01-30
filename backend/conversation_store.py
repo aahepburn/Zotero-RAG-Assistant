@@ -33,25 +33,29 @@ class ConversationStore:
         # Maps session_id -> ConversationHistory
         self._sessions: Dict[str, ConversationHistory] = {}
         
-        # Use enhanced academic system prompt (2025 best practices)
+        # Default system prompt (can be overridden per session)
         self.default_system_prompt = AcademicPrompts.get_system_prompt()
     
-    def get_messages(self, session_id: str) -> List[Message]:
+    def get_messages(self, session_id: str, provider_id: Optional[str] = None) -> List[Message]:
         """
         Retrieve the message history for a session.
         
         Args:
             session_id: Unique session identifier
+            provider_id: Optional provider ID for provider-specific prompt customization
             
         Returns:
             List of messages in chronological order, including system prompt
         """
         if session_id not in self._sessions:
+            # Get provider-specific system prompt if available
+            system_prompt = AcademicPrompts.get_system_prompt(provider_id)
+            
             # Initialize new session with system prompt
             self._sessions[session_id] = ConversationHistory(
                 session_id=session_id,
-                messages=[Message(role="system", content=self.default_system_prompt)],
-                system_prompt=self.default_system_prompt
+                messages=[Message(role="system", content=system_prompt)],
+                system_prompt=system_prompt
             )
         
         return self._sessions[session_id].messages.copy()

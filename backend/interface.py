@@ -6,6 +6,7 @@ from backend.pdf import PDF
 from backend.vector_db import ChromaClient
 from backend.embed_utils import get_embedding, rerank_passages
 from backend.model_providers import ProviderManager, Message
+from backend.model_providers.base import ResponseValidator
 from backend.conversation_store import ConversationStore
 from backend.academic_prompts import AcademicPrompts, AcademicGenerationParams
 from backend.query_condenser import QueryCondenser
@@ -13,6 +14,10 @@ import os
 from collections import OrderedDict
 import threading
 import time
+import logging
+
+# Initialize logger for this module
+logger = logging.getLogger(__name__)
 
 class ZoteroChatbot:
     def __init__(
@@ -572,7 +577,10 @@ class ZoteroChatbot:
         print("="*80)
         
         if session_id:
-            conversation_history = self.conversation_store.get_messages(session_id)
+            conversation_history = self.conversation_store.get_messages(
+                session_id, 
+                provider_id=self.provider_manager.active_provider_id
+            )
             user_turns = len([m for m in conversation_history if m.role == "user"])
             is_new_session = (user_turns == 0)
             print(f"Session {session_id}: user_turns={user_turns}, is_new={is_new_session}")
@@ -707,7 +715,10 @@ class ZoteroChatbot:
             self.conversation_store.append_message(session_id, "user", user_message)
             
             # Get updated history and trim for context window
-            full_history = self.conversation_store.get_messages(session_id)
+            full_history = self.conversation_store.get_messages(
+                session_id,
+                provider_id=self.provider_manager.active_provider_id
+            )
             print(f"\nFULL HISTORY before trim: {len(full_history)} messages")
             for i, msg in enumerate(full_history):
                 preview = msg.content[:100].replace('\n', ' ')
@@ -749,20 +760,58 @@ class ZoteroChatbot:
             print(f"\nLLM RESPONSE received ({len(summary)} chars)")
             print(f"   First 200 chars: {summary[:200].replace(chr(10), ' ')}...")
             
-            # Detect "I'm ready" meta-responses
-            if any(phrase in summary.lower() for phrase in ["i'm ready", "i am ready", "i understand", "okay, i understand"]):
-                print("\nWARNING: Detected meta-response! Model acknowledged instructions instead of answering.")
-                print("    This indicates instructions were embedded in the user message.")
+            # Validate response for common failure patterns
+            is_valid, issues = ResponseValidator.validate_chat_response(
+                response, 
+                self.provider_manager.active_provider_id
+            )
+            
+            if not is_valid:
+                logger.warning(
+                    f"Provider {self.provider_manager.active_provider_id} failed validation: {issues}"
+                )
+                print(f"\nWARNING: Response validation failed with {len(issues)} issues:")
+                for issue in issues:
+                    print(f"   - {issue}")
+                
+                # Log specific patterns for debugging
+                if "Meta-response detected" in issues:
+                    logger.warning(
+                        f"Meta-response detected for provider {self.provider_manager.active_provider_id}. "
+                        "Instructions may have been embedded in user message."
+                    )
+                    print("    This indicates instructions were embedded in the user message.")
+                    print("    The model acknowledged instructions instead of answering.")
+                
+                if "Raw citations detected" in issues:
+                    logger.warning(
+                        f"Raw citations detected for provider {self.provider_manager.active_provider_id}. "
+                        "Web search may have been activated instead of using provided context."
+                    )
+                    print("    Perplexity returned search results instead of answer.")
+                    print("    This may indicate web search mode was activated instead of using provided context.")
+                    print("    Consider switching to a different model provider for RAG over private documents.")
             
             # Save assistant response to conversation history
             if session_id:
                 self.conversation_store.append_message(session_id, "assistant", summary)
         except Exception as e:
-            print(f"LLM generation error: {e}")
+            print(f"\n{'='*80}")
+            print(f"LLM GENERATION ERROR")
+            print(f"{'='*80}")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Error message: {str(e)}")
+            import traceback
+            print(f"Traceback:\n{traceback.format_exc()}")
+            print(f"{'='*80}\n")
+            
+            # Fallback behavior
             if snippets:
+                print("WARNING: Falling back to returning first snippet due to LLM error")
                 summary = snippets[0]["snippet"]
             else:
-                summary = "No relevant passages found in your Zotero library."
+                summary = f"Error: Failed to generate response. {str(e)}"
+                print("ERROR: No snippets available for fallback")
 
         # STEP 6: Generate session title for new sessions
         generated_title = None

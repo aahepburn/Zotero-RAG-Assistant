@@ -9,7 +9,8 @@ from typing import Dict, Any, List
 import requests
 from .base import (
     BaseProvider, Message, ChatResponse, ModelInfo,
-    ProviderError, ProviderConnectionError, ProviderAuthenticationError
+    ProviderError, ProviderConnectionError, ProviderAuthenticationError,
+    MessageAdapter, ParameterMapper
 )
 
 
@@ -96,11 +97,11 @@ class OllamaProvider(BaseProvider):
         """
         base_url = self._get_base_url(credentials)
         
-        # Convert messages to Ollama format
-        ollama_messages = [
-            {"role": msg.role, "content": msg.content}
-            for msg in messages
-        ]
+        # Use MessageAdapter for Ollama format (same as OpenAI)
+        ollama_messages = MessageAdapter.to_openai(messages)
+        
+        # Map standard parameters to Ollama equivalents
+        mapped_params = ParameterMapper.map_params(kwargs, self.id)
         
         payload = {
             "model": model,
@@ -113,9 +114,9 @@ class OllamaProvider(BaseProvider):
                 # - top_p: 0.9 prevents low-probability hallucinations via nucleus sampling
                 # - top_k: 50 provides vocab diversity for technical language
                 # - repeat_penalty: 1.15 prevents citation/concept repetition
-                "top_p": kwargs.get("top_p", 0.9),
-                "top_k": kwargs.get("top_k", 50),
-                "repeat_penalty": kwargs.get("repeat_penalty", 1.15),
+                "top_p": mapped_params.get("top_p", 0.9),
+                "top_k": mapped_params.get("top_k", 50),
+                "repeat_penalty": mapped_params.get("repeat_penalty", 1.15),
             }
         }
         

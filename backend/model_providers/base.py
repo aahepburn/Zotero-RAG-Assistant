@@ -50,6 +50,193 @@ class ProviderAuthenticationError(ProviderError):
     pass
 
 
+class ProviderRateLimitError(ProviderError):
+    """Raised when rate limit is exceeded."""
+    def __init__(self, message: str, retry_after: Optional[int] = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class ProviderContextError(ProviderError):
+    """Raised when context length is exceeded."""
+    def __init__(self, message: str, max_length: Optional[int] = None):
+        super().__init__(message)
+        self.max_length = max_length
+
+
+class MessageAdapter:
+    """Adapts standard Message format to provider-specific formats."""
+    
+    @staticmethod
+    def to_openai(messages: List[Message]) -> List[Dict[str, str]]:
+        """Convert to OpenAI format (also used by Ollama, Perplexity, Groq, OpenRouter)."""
+        return [{"role": msg.role, "content": msg.content} for msg in messages]
+    
+    @staticmethod
+    def to_anthropic(messages: List[Message]) -> tuple[Optional[str], List[Dict[str, str]]]:
+        """
+        Convert to Anthropic format.
+        Returns (system_message, conversation_messages).
+        System message must be separate parameter.
+        """
+        system_message = None
+        conversation_messages = []
+        
+        for msg in messages:
+            if msg.role == "system":
+                system_message = msg.content
+            else:
+                conversation_messages.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+        
+        return system_message, conversation_messages
+    
+    @staticmethod
+    def to_gemini(messages: List[Message]) -> tuple[Optional[str], List[Dict[str, Any]]]:
+        """
+        Convert to Google Gemini format.
+        Returns (system_instruction, history).
+        System instruction is model parameter, history uses 'model' role instead of 'assistant'.
+        """
+        system_instruction = None
+        history = []
+        
+        for msg in messages:
+            if msg.role == "system":
+                system_instruction = msg.content
+            else:
+                # Gemini uses 'model' role instead of 'assistant'
+                role = "user" if msg.role == "user" else "model"
+                history.append({
+                    "role": role,
+                    "parts": [msg.content]
+                })
+        
+        return system_instruction, history
+    
+    @staticmethod
+    def to_perplexity(messages: List[Message]) -> List[Dict[str, str]]:
+        """
+        Convert to Perplexity format.
+        Perplexity uses OpenAI-compatible format with optional system message.
+        Uses same format as OpenAI.
+        """
+        return MessageAdapter.to_openai(messages)
+
+
+class ParameterMapper:
+    """Maps standard parameter names to provider-specific equivalents."""
+    
+    # Mapping of standard param names to provider-specific names
+    MAPPINGS = {
+        "ollama": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "top_k": "top_k",
+            "repetition_penalty": "repeat_penalty",
+        },
+        "openai": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "repetition_penalty": "frequency_penalty",
+        },
+        "anthropic": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "top_k": "top_k",
+        },
+        "google": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "top_k": "top_k",
+        },
+        "perplexity": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+        },
+        "groq": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "repetition_penalty": "frequency_penalty",
+        },
+        "openrouter": {
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "repetition_penalty": "frequency_penalty",
+        },
+    }
+    
+    @staticmethod
+    def map_params(params: Dict[str, Any], provider_id: str) -> Dict[str, Any]:
+        """
+        Map standard parameter names to provider-specific names.
+        Only includes parameters supported by the provider.
+        """
+        mapping = ParameterMapper.MAPPINGS.get(provider_id, {})
+        mapped = {}
+        
+        for key, value in params.items():
+            # Map the key to provider-specific name
+            provider_key = mapping.get(key)
+            if provider_key:
+                mapped[provider_key] = value
+            # Keep unmapped keys if they're not in our standard set
+            elif key not in ["top_p", "top_k", "repetition_penalty"]:
+                mapped[key] = value
+        
+        return mapped
+
+
+class ResponseValidator:
+    """Validates provider responses to detect common failure patterns."""
+    
+    # Phrases indicating meta-responses instead of actual answers
+    META_RESPONSE_PHRASES = [
+        "i'm ready",
+        "i understand",
+        "okay, i'll",
+        "i will now",
+        "let me know",
+        "i'd be happy to",
+        "i can help",
+    ]
+    
+    @staticmethod
+    def validate_chat_response(response: ChatResponse, provider_id: str) -> tuple[bool, List[str]]:
+        """
+        Validate a chat response for common issues.
+        Returns (is_valid, list_of_issues).
+        """
+        issues = []
+        content_lower = response.content.lower().strip()
+        
+        # Check for meta-responses
+        if any(phrase in content_lower for phrase in ResponseValidator.META_RESPONSE_PHRASES):
+            issues.append("Meta-response detected (acknowledgment instead of answer)")
+        
+        # Check for raw citations (Perplexity-specific)
+        if provider_id == "perplexity":
+            # High density of periods and commas suggests raw bibliography
+            if len(response.content) > 100:
+                period_density = response.content.count(".") / len(response.content)
+                comma_density = response.content.count(",") / len(response.content)
+                if period_density > 0.05 and comma_density > 0.03:
+                    issues.append("Raw citations detected (bibliography dump)")
+        
+        # Check for empty or very short responses
+        if len(response.content.strip()) < 10:
+            issues.append("Response too short or empty")
+        
+        # Check for error messages in response
+        error_indicators = ["error:", "exception:", "failed to", "could not"]
+        if any(indicator in content_lower for indicator in error_indicators):
+            issues.append("Error message in response content")
+        
+        return len(issues) == 0, issues
+
+
 class ModelProvider(Protocol):
     """
     Protocol defining the interface all LLM providers must implement.

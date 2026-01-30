@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-30
+
+### Added
+- **Provider-Agnostic Architecture**: Implemented comprehensive refactoring for external API integrations
+  - MessageAdapter class for format conversion (OpenAI, Anthropic, Gemini, Perplexity)
+  - ParameterMapper for parameter translation across providers
+  - ResponseValidator for detecting meta-responses and quality issues
+- **Support & Feedback Section**: Added prominent section in Settings page with:
+  - Direct link to GitHub Issues for bug reports
+  - GitHub Sponsors button for project support
+  - Instructions for reporting bugs (screenshots, error messages, console logs)
+- **Platform Detection**: Added getPlatform() API for OS-specific features
+- **Test Suite**: Created comprehensive test suite for provider adapters (13 tests passing)
+
+### Changed
+- **Manual Updates Only**: Disabled automatic downloads for all platforms to prevent installation errors
+  - App still checks for updates automatically (startup + every 4 hours)
+  - Users directed to GitHub Releases for manual downloads
+  - Clear warning message with direct link when updates are available
+- **Enhanced Logging**: Improved provider validation logging with structured warnings
+- **Provider-Specific Prompts**: Added PROVIDER_OVERRIDES for Perplexity (anti-web-search) and Google (concise)
+- **API Key Display**: Improved security with masked keys ("***") in Settings UI
+- **Documentation**: Updated AUTO_UPDATES.md to reflect manual-only update flow
+
+### Fixed
+- **Critical Shutdown Race Conditions**:
+  - Fixed before-quit race by removing app.exit(0), allowing natural quit flow
+  - Made stopBackendSync actually wait for timeout before SIGKILL
+  - Increased backend shutdown delay from 0.5s to 2.0s for reliable cleanup
+  - Added port check retry with exponential backoff (500ms → 1s → 2s, max 6 attempts)
+- **External API Integration**: Fixed issues with Google Gemini and Perplexity returning meta-responses
+- **Provider Parameter Mapping**: Corrected temperature and parameter translation for all 7 providers
+- **Test Failures**: Fixed parameter mapper tests and citation detection thresholds
+
+### Technical
+- Added pytest>=9.0.0 to requirements.txt
+- Implemented isShuttingDown flag to prevent duplicate shutdown attempts
+- Enhanced error handling for provider rate limits and context errors
+- Improved process tree killing for Windows (taskkill /T) and Unix (negative PID)
+
 ## [0.2.5] - 2026-01-19
 
 ### Fixed

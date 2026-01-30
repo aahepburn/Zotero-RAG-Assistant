@@ -28,6 +28,7 @@ const FRONTEND_DEV_URL = 'http://localhost:5173';
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 let authToken: string | null = null;
+let isShuttingDown = false; // FIX: Prevent duplicate shutdown attempts
 let updateDownloaded = false;
 let updateInfo: { version: string; releaseNotes?: string } | null = null;
 
@@ -1217,15 +1218,23 @@ async function stopBackend(): Promise<void> {
     
     console.log('✓ Backend process tree killed');
     
-    // Wait a moment for port to be released
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // FIX: Port check with retry and exponential backoff
+    let portReleased = false;
+    const maxAttempts = 6;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const delay = Math.min(500 * Math.pow(2, attempt), 2000); // 500ms, 1s, 2s, 2s...
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      portReleased = await isPortAvailable(BACKEND_PORT);
+      if (portReleased) {
+        console.log(`✓ Port ${BACKEND_PORT} successfully released after ${attempt + 1} attempts`);
+        break;
+      }
+      console.log(`  Port check attempt ${attempt + 1}/${maxAttempts}...`);
+    }
     
-    // Verify port is released
-    const portReleased = await isPortAvailable(BACKEND_PORT);
-    if (portReleased) {
-      console.log(`✓ Port ${BACKEND_PORT} successfully released`);
-    } else {
-      console.warn(`⚠ Port ${BACKEND_PORT} may still be in use`);
+    if (!portReleased) {
+      console.error(`✗ Port ${BACKEND_PORT} still in use after ${maxAttempts} attempts`);
     }
     
   } catch (error) {
@@ -1261,14 +1270,17 @@ function stopBackendSync(): void {
       spawn('taskkill', ['/pid', pid.toString(), '/T', '/F']);
     } else {
       process.kill(-pid, 'SIGTERM');
-      // Immediate force kill for sync version
-      setTimeout(() => {
-        try {
-          process.kill(-pid, 'SIGKILL');
-        } catch (e) {
-          // Process already dead
-        }
-      }, 500);
+      // FIX: Wait for SIGTERM timeout before SIGKILL
+      // Use synchronous blocking wait instead of fire-and-forget setTimeout
+      const startTime = Date.now();
+      while (Date.now() - startTime < 500) {
+        // Busy wait for 500ms to give SIGTERM time to work
+      }
+      try {
+        process.kill(-pid, 'SIGKILL');
+      } catch (e) {
+        // Process already dead - good!
+      }
     }
     console.log('✓ Backend process killed');
   } catch (error) {
@@ -1406,6 +1418,11 @@ function setupIpcHandlers(): void {
   // Get app version
   ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+  });
+  
+  // Get platform
+  ipcMain.handle('get-platform', () => {
+    return process.platform; // Returns 'darwin', 'win32', 'linux', etc.
   });
   
   // Open external links
@@ -1731,12 +1748,15 @@ app.on('activate', () => {
  * Before quit event - cleanup
  */
 app.on('before-quit', async (event) => {
-  if (backendProcess) {
+  // FIX: Race condition - remove app.exit(0) to let natural quit flow hit will-quit
+  if (backendProcess && !isShuttingDown) {
     event.preventDefault();
+    isShuttingDown = true;
     console.log('App is quitting, cleaning up...');
     await stopBackend();
-    console.log('✓ Cleanup complete, exiting');
-    app.exit(0);
+    console.log('✓ Cleanup complete');
+    // Let app quit naturally instead of forcing exit
+    app.quit();
   }
 });
 

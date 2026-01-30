@@ -169,6 +169,51 @@ const Settings: React.FC = () => {
 
       <div className="settings-container">
         <section className="settings-section">
+          <h2 className="settings-section-title">Support & Feedback</h2>
+          <p className="settings-section-description">
+            Help improve Zotero RAG Assistant by reporting bugs or supporting the project.
+          </p>
+          
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
+            <Button
+              onClick={() => window.open('https://github.com/aahepburn/Zotero-RAG-Assistant/issues/new', '_blank', 'noopener,noreferrer')}
+              variant="secondary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              Report a Bug
+            </Button>
+            
+            <Button
+              onClick={() => window.open('https://github.com/sponsors/aahepburn', '_blank', 'noopener,noreferrer')}
+              variant="secondary"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7.655 14.916L7.648 14.91L7.641 14.903C5.787 13.29 4.328 11.984 3.316 10.781C2.315 9.59 1.8 8.55 1.8 7.5C1.8 5.821 3.021 4.6 4.7 4.6C5.746 4.6 6.77 5.171 7.34 6.025L8 7.015L8.66 6.025C9.23 5.171 10.254 4.6 11.3 4.6C12.979 4.6 14.2 5.821 14.2 7.5C14.2 8.55 13.685 9.59 12.684 10.781C11.672 11.984 10.213 13.29 8.359 14.903L8.352 14.91L8.345 14.916C8.153 15.082 7.847 15.082 7.655 14.916Z" fill="#DB61A2" stroke="#DB61A2" strokeWidth="1.2"/>
+              </svg>
+              <span style={{ color: '#DB61A2', fontWeight: 500 }}>Sponsor</span>
+            </Button>
+          </div>
+          
+          <p className="settings-hint" style={{ marginTop: '12px' }}>
+            <strong>Found a bug?</strong> Open an issue on GitHub and include:
+            <ul style={{ marginTop: '8px', marginLeft: '20px', lineHeight: '1.6' }}>
+              <li>Screenshots of the problem</li>
+              <li>Any error messages you see</li>
+              <li>Console logs (open Dev Tools with <kbd style={{ padding: '2px 6px', backgroundColor: 'var(--bg-secondary, #e9ecef)', borderRadius: '3px', fontSize: '12px' }}>Cmd+Option+I</kbd> on Mac or <kbd style={{ padding: '2px 6px', backgroundColor: 'var(--bg-secondary, #e9ecef)', borderRadius: '3px', fontSize: '12px' }}>Ctrl+Shift+I</kbd> on Windows/Linux, then copy from the Console tab)</li>
+            </ul>
+            <strong>Like the app?</strong> Consider sponsoring to support continued development!
+          </p>
+        </section>
+
+        <section className="settings-section">
           <h2 className="settings-section-title">Profile</h2>
           <p className="settings-section-description">
             Manage your user profiles. Each profile has its own settings, chat history, and vector database.
@@ -271,25 +316,33 @@ const Settings: React.FC = () => {
                     Check for Updates
                   </Button>
                 )}
-                
-                {updater.status === 'available' && (
-                  <Button
-                    onClick={updater.downloadUpdate}
-                    variant="primary"
-                  >
-                    Download Update
-                  </Button>
-                )}
-                
-                {updater.status === 'downloaded' && (
-                  <Button
-                    onClick={updater.installUpdate}
-                    variant="primary"
-                  >
-                    Install and Restart
-                  </Button>
-                )}
               </div>
+              
+              {updater.status === 'available' && updater.updateInfo && (
+                <div className="settings-note" style={{ 
+                  marginTop: '16px',
+                  padding: '16px', 
+                  backgroundColor: 'var(--warning-bg, #fff3cd)', 
+                  borderLeft: '4px solid var(--warning, #ffc107)', 
+                  fontSize: '14px',
+                  color: 'var(--text)',
+                  lineHeight: '1.6'
+                }}>
+                  <strong style={{ display: 'block', marginBottom: '8px', fontSize: '15px' }}>
+                    ⚠️ Manual Update Required
+                  </strong>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    Version {updater.updateInfo.version} is available. To update, please download the new release file manually from GitHub Releases.
+                  </p>
+                  <Button
+                    onClick={() => window.electron?.openExternal('https://github.com/aahepburn/Zotero-RAG-Assistant/releases/latest')}
+                    variant="primary"
+                    style={{ marginTop: '8px' }}
+                  >
+                    Download from GitHub Releases →
+                  </Button>
+                </div>
+              )}
               
               <div className="settings-note" style={{ 
                 marginTop: '16px',
@@ -299,7 +352,7 @@ const Settings: React.FC = () => {
                 fontSize: '13px',
                 color: 'var(--text-muted)'
               }}>
-                <strong>Note:</strong> If automatic updates don't work, you can download the latest version manually from{' '}
+                <strong>Note:</strong> Automatic updates are disabled. When a new version is available, you'll need to download and install it manually from{' '}
                 <a 
                   href="https://github.com/aahepburn/Zotero-RAG-Assistant/releases" 
                   target="_blank" 

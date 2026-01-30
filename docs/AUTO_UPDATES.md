@@ -66,29 +66,19 @@ This ensures that:
 
 When an update is found:
 - User is notified in Settings page
-- Update version and release notes are displayed
-- "Download Update" button becomes available
+- Update version is displayed
+- **Manual download required**: User must click "Download from GitHub Releases" button to go to the releases page
 
-### 3. Downloading Update
+### 3. Manual Update Installation
 
-When user clicks "Download Update":
-- Download begins in background
-- Progress bar shows download percentage and size
-- User can continue using the app during download
-
-### 4. Update Downloaded
-
-When download completes:
-- User is notified that update is ready
-- "Install and Restart" button becomes available
-- Update is automatically installed on next app quit
-
-### 5. Installing Update
-
-When user clicks "Install and Restart":
-- App quits immediately
-- Update is installed
-- App restarts automatically with new version
+**Automatic downloads are disabled for all platforms** to avoid potential installation errors. When an update is available:
+- Click "Download from GitHub Releases" button in Settings
+- Download the appropriate installer for your platform:
+  - **macOS**: `.dmg` or `.zip` file
+  - **Windows**: `.exe` installer or `.zip` file
+  - **Linux**: `.AppImage` or `.deb` package
+- Run the installer to update the application
+- Restart the app to use the new version
 
 ## Configuration
 
@@ -112,9 +102,11 @@ When user clicks "Install and Restart":
 ### Main Process Settings
 
 ```typescript
-autoUpdater.autoDownload = false;      // Don't auto-download, let user decide
-autoUpdater.autoInstallOnAppQuit = true; // Install on quit after download
+autoUpdater.autoDownload = false;        // Auto-download is disabled for all platforms
+autoUpdater.autoInstallOnAppQuit = true; // Not used since auto-download is disabled
 ```
+
+**Note:** Automatic downloads are disabled to prevent installation errors. Users must manually download updates from GitHub Releases when notified.
 
 ## Publishing Updates
 
@@ -202,19 +194,19 @@ GH_TOKEN=your_token electron-builder --mac --publish always
 ### Update Notifications
 
 - **Non-intrusive**: Updates don't interrupt the user
-- **User Control**: User decides when to download and install
-- **Progress Feedback**: Clear progress indicators during download
-- **Graceful Handling**: Errors are displayed with clear messages
+- **Manual Control**: Users must manually download and install updates from GitHub Releases
+- **Clear Instructions**: Warning message with direct link to releases page
+- **Platform Agnostic**: Same experience across macOS, Windows, and Linux
 
 ### Update States
 
 1. **Idle** - No update check performed yet
 2. **Checking** - Checking for updates with spinner
 3. **Not Available** - Running latest version (green checkmark)
-4. **Available** - Update available (orange, with version info)
-5. **Downloading** - Download in progress (blue, with progress bar)
-6. **Downloaded** - Ready to install (green, with install button)
-7. **Error** - Something went wrong (red, with error message)
+4. **Available** - Update available (yellow warning with link to GitHub Releases)
+5. **Error** - Something went wrong (red, with error message)
+
+**Note:** Download and install states are removed since automatic updates are disabled.
 
 ## Troubleshooting
 
@@ -243,15 +235,15 @@ GH_TOKEN=your_token electron-builder --mac --publish always
 - Verify update metadata files are published
 - Check console for error messages
 
-**Download fails**
-- Check network connection
-- Verify GitHub Release assets are accessible
-- Check file permissions and disk space
+**Manual download link not working**
+- Verify you have internet connection
+- Try opening https://github.com/aahepburn/Zotero-RAG-Assistant/releases/latest directly
+- Check if GitHub is accessible from your network
 
-**Install fails**
-- On macOS: Check code signing and notarization
-- On Windows: Check antivirus/firewall settings
-- Verify update files are not corrupted (check checksums)
+**Update check fails**
+- Check network connection
+- Verify GitHub Releases API is accessible
+- Check console logs for specific error messages
 
 ## API Reference
 

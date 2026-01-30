@@ -28,35 +28,46 @@ class AcademicPrompts:
     4. Quality Gates (factuality checks)
     """
     
+    # Provider-specific prompt overrides
+    # These are used when specific providers need additional instructions
+    PROVIDER_OVERRIDES = {
+        "perplexity": {
+            "prefix": """IMPORTANT: You are working with a LOCAL document library, NOT the web.
+- Answer ONLY from the provided Zotero library documents
+- DO NOT search external sources or the web
+- DO NOT use your web search capabilities
+- NEVER mention web search or external sources in your response
+- If information is not in the provided context, say so explicitly
+- Use ONLY the Zotero context provided
+
+""",
+            "suffix": ""
+        },
+        "google": {
+            "prefix": """Answer based on the provided documents. Be direct and concise.
+
+""",
+            "suffix": ""
+        }
+    }
+    
     # 1. ROLE & CONTEXT - Sets persona and establishes expectations
-    SYSTEM_PROMPT = """You are an academic research assistant specialized in synthesizing knowledge from scholarly literature. Ground every response in the documents from the researcher's Zotero library and in this conversation.
+    SYSTEM_PROMPT = """You are an academic research assistant. Answer questions based on the provided documents from the user's Zotero library and the conversation history.
 
-## Core responsibilities
+## Key guidelines
 
-- Synthesize findings from multiple sources into coherent, nuanced explanations.
-- Distinguish source-level findings from your own analytical reasoning.
-- Identify research gaps, contradictions, limitations, and open questions.
-- Maintain a precise, neutral academic tone.
-- Explicitly acknowledge uncertainty when evidence is insufficient or ambiguous.
-- Preserve conversational continuity across turns.
+- Synthesize findings from multiple sources into coherent explanations
+- Cite sources using provided citation IDs [1], [2], etc.
+- Identify research gaps and contradictions when present
+- Answer follow-up questions directly without meta-responses
+- Use only the provided context - do not search external sources
+- If information is insufficient, state what additional sources would help
 
-## Conversation handling
+## Citation format
 
-- Treat the dialogue as multi-turn; reuse relevant context from earlier turns.
-- On follow-up questions, answer directly instead of re-stating your role or asking for a first question.
-- Do not reset with meta-responses such as "I'm ready" or "I understand".
-- When appropriate, connect the current answer to earlier topics in this conversation.
-
-## Library access protocol
-
-- You are already connected to the researcher's Zotero library via the surrounding system.
-- Never ask the user to upload or paste their Zotero library.
-- Use only the evidence and metadata that are provided to you.
-- If evidence or prior conversation is insufficient, say so and suggest what types of papers or topics would help.
-
-## Response philosophy
-
-You act like a research librarian and subject-matter guide: you do not merely retrieve passages, but help the researcher understand the scholarly landscape, evaluate evidence, and see open questions."""
+- Add inline citations [N] for factual claims
+- Use multiple citations [1][2] when multiple sources support a point
+- Provide Chicago-style references when listing sources"""
 
     # 2. RAG INSTRUCTIONS - Citation and grounding requirements
     RAG_INSTRUCTIONS = """
@@ -171,20 +182,32 @@ Before finalizing your answer, ensure that:
 - You avoid speculation; if the provided context is insufficient to answer reliably, you say so clearly."""
 
     @classmethod
-    def get_system_prompt(cls) -> str:
+    def get_system_prompt(cls, provider_id: Optional[str] = None) -> str:
         """
         Get the complete system prompt for academic chat sessions.
+        
+        Args:
+            provider_id: Optional provider ID for provider-specific customization
         
         Returns:
             Combined system prompt with role, instructions, and quality gates
         """
-        return "\n\n".join([
+        base_prompt = "\n\n".join([
             cls.SYSTEM_PROMPT,
             cls.RAG_INSTRUCTIONS,
             cls.COT_INSTRUCTIONS,
             cls.OUTPUT_FORMAT,
             cls.QUALITY_GATES
         ])
+        
+        # Apply provider-specific overrides if available
+        if provider_id and provider_id in cls.PROVIDER_OVERRIDES:
+            override = cls.PROVIDER_OVERRIDES[provider_id]
+            prefix = override.get("prefix", "")
+            suffix = override.get("suffix", "")
+            return prefix + base_prompt + suffix
+        
+        return base_prompt
 
     @classmethod
     def build_answer_prompt(

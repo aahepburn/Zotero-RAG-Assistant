@@ -8,7 +8,9 @@ GPT-4, GPT-3.5, and other OpenAI models.
 from typing import Dict, Any, List, Optional
 from .base import (
     BaseProvider, Message, ChatResponse, ModelInfo,
-    ProviderError, ProviderAuthenticationError, ProviderConnectionError
+    ProviderError, ProviderAuthenticationError, ProviderConnectionError,
+    ProviderRateLimitError, ProviderContextError,
+    MessageAdapter, ParameterMapper
 )
 
 
@@ -138,11 +140,11 @@ class OpenAIProvider(BaseProvider):
         try:
             client = self._get_client(credentials)
             
-            # Convert to OpenAI message format
-            openai_messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in messages
-            ]
+            # Use MessageAdapter for OpenAI format
+            openai_messages = MessageAdapter.to_openai(messages)
+            
+            # Map standard parameters to OpenAI equivalents
+            mapped_params = ParameterMapper.map_params(kwargs, self.id)
             
             # Make the API call with 2025 best practices for academic RAG
             # top_p: 0.9 for nucleus sampling (prevents low-prob hallucinations)
@@ -152,8 +154,8 @@ class OpenAIProvider(BaseProvider):
                 messages=openai_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                top_p=kwargs.get("top_p", 0.9),
-                frequency_penalty=kwargs.get("frequency_penalty", 0.3),
+                top_p=mapped_params.get("top_p", 0.9),
+                frequency_penalty=mapped_params.get("frequency_penalty", 0.3),
                 presence_penalty=kwargs.get("presence_penalty", 0.0),
             )
             
@@ -181,8 +183,8 @@ class OpenAIProvider(BaseProvider):
             if "authentication" in error_msg or "api key" in error_msg:
                 raise ProviderAuthenticationError(f"OpenAI authentication failed: {str(e)}")
             elif "rate limit" in error_msg:
-                raise ProviderError(f"OpenAI rate limit exceeded: {str(e)}")
+                raise ProviderRateLimitError(f"OpenAI rate limit exceeded: {str(e)}")
             elif "context length" in error_msg or "maximum context" in error_msg:
-                raise ProviderError(f"Context too long for model {model}: {str(e)}")
+                raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
             else:
                 raise ProviderError(f"OpenAI chat failed: {str(e)}")

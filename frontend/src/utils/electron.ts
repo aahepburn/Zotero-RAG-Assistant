@@ -32,6 +32,7 @@ export interface ElectronAPI {
   
   // App information
   getAppVersion: () => Promise<string>;
+  getPlatform: () => Promise<string>;
   
   // External links
   openExternal: (url: string) => Promise<void>;
@@ -129,6 +130,23 @@ export async function getAppVersion(): Promise<string | null> {
       return await electron.getAppVersion();
     } catch (error) {
       console.error('Failed to get app version:', error);
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Get platform
+ */
+export async function getPlatform(): Promise<string | null> {
+  const electron = getElectronAPI();
+  
+  if (electron) {
+    try {
+      return await electron.getPlatform();
+    } catch (error) {
+      console.error('Failed to get platform:', error);
     }
   }
   

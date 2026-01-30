@@ -20,6 +20,7 @@ export interface ElectronAPI {
   
   // App information
   getAppVersion: () => Promise<string>;
+  getPlatform: () => Promise<string>;
   
   // External links
   openExternal: (url: string) => Promise<void>;
@@ -48,6 +49,8 @@ contextBridge.exposeInMainWorld('electron', {
   
   // App information
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
   
   // External links
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
