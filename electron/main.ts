@@ -1305,6 +1305,9 @@ function createWindow(): void {
     minWidth: 1000,
     minHeight: 600,
     title: 'Zotero RAG Assistant',
+    titleBarStyle: 'hiddenInset', // Hide title text, keep traffic lights (macOS)
+    trafficLightPosition: { x: 16, y: 16 }, // Position window controls nicely
+    backgroundColor: '#1a1a1a', // Darker background for title bar area
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

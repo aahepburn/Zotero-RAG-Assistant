@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "ZoteroRAG",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -127,20 +127,36 @@
       "writeUpdateInfo": true,
       "contents": [
         {
-          "x": 130,
-          "y": 220
+          "x": 140,
+          "y": 200,
+          "type": "file"
         },
         {
-          "x": 410,
-          "y": 220,
+          "x": 400,
+          "y": 200,
           "type": "link",
           "path": "/Applications"
+        },
+        {
+          "x": 140,
+          "y": 340,
+          "type": "file",
+          "path": "build/dmg/README.txt",
+          "name": "Installation Instructions.txt"
+        },
+        {
+          "x": 400,
+          "y": 340,
+          "type": "file",
+          "path": "build/dmg/LICENSE.txt"
         }
       ],
       "window": {
-        "width": 540,
-        "height": 400
-      }
+        "width": 600,
+        "height": 500
+      },
+      "backgroundColor": "#f5f5f5",
+      "icon": "build/icon.icns"
     },
     "win": {
       "extraResources": [

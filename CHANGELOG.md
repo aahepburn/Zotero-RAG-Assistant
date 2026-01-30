@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-01-30
+
+### Changed
+- **macOS Title Bar**: Implemented elegant frameless design with hiddenInset style
+  - Removed app title text from title bar for cleaner appearance
+  - Positioned traffic lights at optimal location (16×16 offset)
+  - Added darker background color (#1a1a1a) for title bar area
+  - Optimized navigation spacing with traffic lights (90px left padding)
+  - Reduced titlebar height from 52px to 28px for minimal footprint
+- **Settings Page**: Cleaned up visual appearance
+  - Changed header to relative positioning (scrolls with content)
+  - Removed sticky background and border for seamless look
+  - Added proper spacing to avoid traffic lights overlap
+- **DMG Installer**: Enhanced first-time installation experience on macOS
+  - Added Installation Instructions file with prominent quarantine removal command
+  - Included LICENSE.txt in DMG for transparency
+  - Configured 4-item grid layout (app, Applications folder, README, LICENSE)
+  - Set larger window size (600×500) with light background for better readability
+
+### Fixed
+- Drag region conflicts between title bar and interactive elements
+- Navigation bar spacing issues with macOS traffic lights
+- Settings header visual inconsistencies when scrolling
+
 ## [0.3.0] - 2026-01-30
 
 ### Added

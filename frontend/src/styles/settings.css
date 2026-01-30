@@ -4,19 +4,20 @@
   min-height: 100vh;
   background: var(--bg-body);
   padding: 0;
+  padding-top: 28px; /* Reduced space for macOS traffic lights */
 }
 
 .settings-header {
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-subtle);
+  background: transparent; /* Remove the bar background */
+  border-bottom: none; /* Remove the border */
   padding: 20px 40px;
+  padding-left: 90px; /* Left padding to avoid traffic lights */
   display: flex;
   align-items: center;
   gap: 20px;
-  position: sticky;
-  top: 0;
+  position: relative; /* No longer sticky - scrolls with content */
   z-index: 10;
-  backdrop-filter: blur(8px);
+  -webkit-app-region: drag; /* Allow window dragging */
 }
 
 .settings-back-btn {

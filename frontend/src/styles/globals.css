@@ -28,6 +28,11 @@ body {
   font-kerning: normal;
 }
 
+/* Disable drag on interactive elements */
+button, a, input, textarea, select {
+  -webkit-app-region: no-drag;
+}
+
 /* keep the paper texture but make it slightly softer */
 body::before {
   content: "";
