@@ -41,7 +41,7 @@ The following sensitive files and directories are excluded from version control 
 **API Keys and Credentials** (`~/.zotero-llm/profiles/{profile}/settings.json`):
 - OpenAI API key
 - Anthropic API key
-- Perplexity API key
+- Mistral API key
 - Google API key
 - Groq API key
 - OpenRouter API key

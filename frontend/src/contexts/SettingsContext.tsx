@@ -66,7 +66,7 @@ const defaultSettings: Settings = {
       enabled: false,
       credentials: { api_key: '' }
     },
-    perplexity: {
+    mistral: {
       enabled: false,
       credentials: { api_key: '' }
     },

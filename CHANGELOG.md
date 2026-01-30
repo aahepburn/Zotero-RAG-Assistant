@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-01-30
+
+### Changed
+- **Provider Integration**: Replaced Perplexity provider with Mistral AI
+  - Removed PerplexityProvider class and all Perplexity-specific code
+  - Added MistralProvider with OpenAI-compatible API
+  - Updated frontend, tests, and documentation
+  - Available models: mistral-large-latest, mistral-medium-latest, mistral-small-latest, open-mistral-nemo, open-mixtral-8x7b
+- **CI Build Process**: Updated macOS Intel builds to handle PyTorch compatibility
+  - Intel Mac CI runners use torch==2.2.2 for building (last version with x64 wheels)
+  - Bundled apps for Intel Macs continue to work correctly
+  - Security risk isolated to CI build environment only
+
+### Security
+- **PyTorch Version**: Updated to `torch>=2.6.0` to address CVE-2025-32434
+  - Fixes serious vulnerability in torch.load() function
+  - **Breaking change for Intel Mac developers**: PyTorch 2.6+ does not provide x86_64 wheels
+  - Intel Mac developers must manually install torch==2.2.2 (with known security risk)
+  - **Intel Mac users (GUI)**: Unaffected - DMG builds continue to work normally
+  - App uses safetensors format for model loading which mitigates the vulnerability
+  - See README for Intel Mac development setup instructions
+
 ## [0.3.1] - 2026-01-30
 
 ### Changed

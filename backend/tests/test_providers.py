@@ -63,18 +63,6 @@ class TestMessageAdapter:
         assert history[0]["role"] == "user"
         assert history[1]["role"] == "model"  # Not 'assistant'
         assert "parts" in history[0]
-    
-    def test_to_perplexity(self):
-        """Test Perplexity uses OpenAI format."""
-        messages = [
-            Message(role="system", content="You are helpful."),
-            Message(role="user", content="Hello")
-        ]
-        
-        result = MessageAdapter.to_perplexity(messages)
-        openai_result = MessageAdapter.to_openai(messages)
-        
-        assert result == openai_result
 
 
 class TestParameterMapper:
@@ -182,26 +170,7 @@ class TestResponseValidator:
         
         assert not is_valid
         assert any("too short" in issue.lower() for issue in issues)
-    
-    def test_raw_citations_detection_perplexity(self):
-        """Test detection of raw citation dumps from Perplexity."""
-        # Create content with high punctuation density matching bibliography format
-        # Need period_density > 0.05 and comma_density > 0.03
-        citations = []
-        for i in range(20):
-            citations.append(f"Author{i}, A., Author{i}, B. Title of Paper {i}. Journal Name, 2020.")
-        
-        response = ChatResponse(
-            content="\n".join(citations),
-            model="test-model",
-            usage=None
-        )
-        
-        is_valid, issues = ResponseValidator.validate_chat_response(response, "perplexity")
-        
-        assert not is_valid, f"Expected invalid response but got valid. Issues: {issues}"
-        assert any("Raw citations" in issue for issue in issues), f"Expected 'Raw citations' in issues but got: {issues}"
-    
+
     def test_error_message_detection(self):
         """Test detection of error messages in response content."""
         response = ChatResponse(
@@ -233,7 +202,7 @@ class TestProviderIntegration:
     """
     
     FIXED_QUERY = "Summarize distribution shifts from my Zotero library"
-    PROVIDERS = ["ollama", "openai", "anthropic", "google", "perplexity", "groq", "openrouter"]
+    PROVIDERS = ["ollama", "openai", "anthropic", "google", "mistral", "groq", "openrouter"]
     
     @pytest.mark.parametrize("provider_id", PROVIDERS)
     def test_provider_consistency(self, provider_id):

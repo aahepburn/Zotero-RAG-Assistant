@@ -81,7 +81,9 @@ Download the latest installer from [Releases](https://github.com/aahepburn/Zoter
 4. Since the app isn't signed by Apple, you will need to run this command in your Terminal first: `xattr -dr com.apple.quarantine "/Applications/ZoteroRAG.app"`
 5. Launch from Applications or Spotlight
 
-**System Requirements:** macOS 10.13 (High Sierra) or later
+**System Requirements:** 
+- macOS 10.13 (High Sierra) or later
+- **Apple Silicon (M1/M2/M3) recommended** - Intel Mac builds may have limited support due to PyTorch compatibility
 
 #### Windows
 1. Download `Zotero-RAG-Assistant-{version}-win-x64.exe`
@@ -146,6 +148,13 @@ cd frontend && npm install && cd ..
 # Run development mode (all services)
 npm run dev
 ```
+
+**Note for Intel Mac Users:** As of v0.3.1, the required PyTorch version (2.6.0+) for security fixes does not provide pre-built wheels for Intel Macs (x86_64). Intel Mac users can still run the app by manually installing an older PyTorch version at their own risk:
+```bash
+pip install torch==2.2.2  # Last version with Intel Mac support
+pip install -r requirements.txt
+```
+⚠️ PyTorch 2.2.2 has a known security vulnerability (CVE-2025-32434) in `torch.load()`. The app mitigates this by using safetensors format for model loading, but users should be aware of the risk.
 
 See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for detailed development instructions.
 

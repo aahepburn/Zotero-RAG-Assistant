@@ -7,7 +7,7 @@ The Zotero RAG Assistant supports multiple LLM providers through a clean, provid
 - **Ollama** (Local, free)
 - **OpenAI** (GPT-4, GPT-3.5)
 - **Anthropic** (Claude)
-- **Perplexity** (Sonar)
+- **Mistral** (Mistral Large, Mixtral)
 - **Google** (Gemini)
 - **Groq** (Fast Llama)
 - **OpenRouter** (Unified access)
@@ -45,7 +45,7 @@ backend/model_providers/
  ollama.py            # Local Ollama support
  openai.py            # OpenAI GPT models
  anthropic.py         # Anthropic Claude
- additional.py        # Perplexity, Google, Groq, OpenRouter
+ additional.py        # Mistral, Google, Groq, OpenRouter
  __init__.py          # Provider registry & manager
 ```
 
@@ -84,7 +84,7 @@ backend/model_providers/
 3. Copy and paste into Settings
 
 ### Others
-- **Perplexity**: https://www.perplexity.ai/settings/api
+- **Mistral**: https://console.mistral.ai/api-keys/
 - **Groq**: https://console.groq.com/keys
 - **OpenRouter**: https://openrouter.ai/keys
 

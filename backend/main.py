@@ -101,7 +101,7 @@ def load_settings(profile_id: str = None):
                     "api_key": ""
                 }
             },
-            "perplexity": {
+            "mistral": {
                 "enabled": False,
                 "credentials": {
                     "api_key": ""

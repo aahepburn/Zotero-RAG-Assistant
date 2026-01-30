@@ -10,7 +10,6 @@ Based on 2025 best practices for academic RAG systems:
 
 References:
 - CiteFix: Enhancing RAG Accuracy (ACL 2025)
-- Industry practices from Perplexity Academic Mode
 - RAG evaluation frameworks (RAGAS)
 """
 
@@ -31,18 +30,6 @@ class AcademicPrompts:
     # Provider-specific prompt overrides
     # These are used when specific providers need additional instructions
     PROVIDER_OVERRIDES = {
-        "perplexity": {
-            "prefix": """IMPORTANT: You are working with a LOCAL document library, NOT the web.
-- Answer ONLY from the provided Zotero library documents
-- DO NOT search external sources or the web
-- DO NOT use your web search capabilities
-- NEVER mention web search or external sources in your response
-- If information is not in the provided context, say so explicitly
-- Use ONLY the Zotero context provided
-
-""",
-            "suffix": ""
-        },
         "google": {
             "prefix": """Answer based on the provided documents. Be direct and concise.
 

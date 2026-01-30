@@ -69,7 +69,7 @@ class MessageAdapter:
     
     @staticmethod
     def to_openai(messages: List[Message]) -> List[Dict[str, str]]:
-        """Convert to OpenAI format (also used by Ollama, Perplexity, Groq, OpenRouter)."""
+        """Convert to OpenAI format (also used by Ollama, Mistral, Groq, OpenRouter)."""
         return [{"role": msg.role, "content": msg.content} for msg in messages]
     
     @staticmethod
@@ -115,15 +115,6 @@ class MessageAdapter:
                 })
         
         return system_instruction, history
-    
-    @staticmethod
-    def to_perplexity(messages: List[Message]) -> List[Dict[str, str]]:
-        """
-        Convert to Perplexity format.
-        Perplexity uses OpenAI-compatible format with optional system message.
-        Uses same format as OpenAI.
-        """
-        return MessageAdapter.to_openai(messages)
 
 
 class ParameterMapper:
@@ -152,7 +143,7 @@ class ParameterMapper:
             "top_p": "top_p",
             "top_k": "top_k",
         },
-        "perplexity": {
+        "mistral": {
             "temperature": "temperature",
             "top_p": "top_p",
         },
@@ -215,15 +206,6 @@ class ResponseValidator:
         # Check for meta-responses
         if any(phrase in content_lower for phrase in ResponseValidator.META_RESPONSE_PHRASES):
             issues.append("Meta-response detected (acknowledgment instead of answer)")
-        
-        # Check for raw citations (Perplexity-specific)
-        if provider_id == "perplexity":
-            # High density of periods and commas suggests raw bibliography
-            if len(response.content) > 100:
-                period_density = response.content.count(".") / len(response.content)
-                comma_density = response.content.count(",") / len(response.content)
-                if period_density > 0.05 and comma_density > 0.03:
-                    issues.append("Raw citations detected (bibliography dump)")
         
         # Check for empty or very short responses
         if len(response.content.strip()) < 10:

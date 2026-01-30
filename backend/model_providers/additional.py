@@ -1,5 +1,5 @@
 """
-Additional LLM providers: Perplexity, Google, Mistral, Groq, and OpenRouter.
+Additional LLM providers: Google, Mistral, Groq, and OpenRouter.
 
 These providers use OpenAI-compatible APIs or their own SDKs.
 """
@@ -13,90 +13,100 @@ from .base import (
 )
 
 
-class PerplexityProvider(BaseProvider):
+class MistralProvider(BaseProvider):
     """
-    Provider for Perplexity AI (Sonar models).
+    Provider for Mistral AI.
     Uses OpenAI-compatible API.
     """
     
     def __init__(self):
         super().__init__(
-            id="perplexity",
-            label="Perplexity",
-            default_model="sonar",
+            id="mistral",
+            label="Mistral",
+            default_model="mistral-large-latest",
             supports_streaming=True,
             requires_api_key=True,
         )
     
     def _get_client(self, credentials: Dict[str, Any]):
-        """Get OpenAI-compatible client for Perplexity."""
+        """Get OpenAI-compatible client for Mistral."""
         try:
             from openai import OpenAI
         except ImportError:
             raise ProviderError(
-                "OpenAI package required for Perplexity. Install with: pip install openai"
+                "OpenAI package required for Mistral. Install with: pip install openai"
             )
         
         api_key = credentials.get("api_key")
         if not api_key:
-            raise ProviderAuthenticationError("Perplexity API key is required")
+            raise ProviderAuthenticationError("Mistral API key is required")
         
         return OpenAI(
             api_key=api_key,
-            base_url="https://api.perplexity.ai"
+            base_url="https://api.mistral.ai/v1"
         )
     
     def validate_credentials(self, credentials: Dict[str, Any]) -> bool:
-        """Validate Perplexity API key."""
+        """Validate Mistral API key."""
         try:
             client = self._get_client(credentials)
-            # Test with a minimal request
-            client.chat.completions.create(
-                model=self.default_model,
-                messages=[{"role": "user", "content": "Hi"}],
-                max_tokens=1
-            )
+            client.models.list()
             return True
         except Exception as e:
             error_msg = str(e).lower()
             if "authentication" in error_msg or "api key" in error_msg or "401" in error_msg:
-                raise ProviderAuthenticationError(f"Invalid Perplexity API key: {str(e)}")
-            raise ProviderError(f"Perplexity validation failed: {str(e)}")
+                raise ProviderAuthenticationError(f"Invalid Mistral API key: {str(e)}")
+            raise ProviderError(f"Mistral validation failed: {str(e)}")
     
     def list_models(self, credentials: Dict[str, Any]) -> List[ModelInfo]:
-        """List available Perplexity models."""
-        return [
-            ModelInfo(
-                id="sonar",
-                name="Sonar",
-                description="Balanced performance with web search",
-                context_length=127072
-            ),
-            ModelInfo(
-                id="sonar-pro",
-                name="Sonar Pro",
-                description="Advanced reasoning with web search",
-                context_length=127072
-            ),
-            ModelInfo(
-                id="llama-3.1-sonar-small-128k-online",
-                name="Llama 3.1 Sonar Small (Online)",
-                description="Fast model with web search",
-                context_length=127072
-            ),
-            ModelInfo(
-                id="llama-3.1-sonar-large-128k-online",
-                name="Llama 3.1 Sonar Large (Online)",
-                description="Powerful model with web search",
-                context_length=127072
-            ),
-            ModelInfo(
-                id="llama-3.1-sonar-huge-128k-online",
-                name="Llama 3.1 Sonar Huge (Online)",
-                description="Most powerful model with web search",
-                context_length=127072
-            ),
-        ]
+        """List available Mistral models."""
+        try:
+            client = self._get_client(credentials)
+            models_response = client.models.list()
+            
+            return [
+                ModelInfo(
+                    id=model.id,
+                    name=model.id,
+                    description=None,
+                    context_length=None
+                )
+                for model in models_response.data
+            ]
+        except Exception:
+            # Fallback to known models
+            return [
+                ModelInfo(
+                    id="mistral-large-latest",
+                    name="Mistral Large (Latest)",
+                    description="Most capable Mistral model",
+                    context_length=128000
+                ),
+                ModelInfo(
+                    id="mistral-medium-latest",
+                    name="Mistral Medium (Latest)",
+                    description="Balanced performance",
+                    context_length=32000
+                ),
+                ModelInfo(
+                    id="mistral-small-latest",
+                    name="Mistral Small (Latest)",
+                    description="Fast and efficient",
+                    context_length=32000
+                ),
+                ModelInfo(
+                    id="open-mistral-nemo",
+                    name="Mistral Nemo",
+                    description="Open source model",
+                    context_length=128000
+                ),
+                ModelInfo(
+                    id="open-mixtral-8x7b",
+                    name="Mixtral 8x7B",
+                    description="Mixture of experts model",
+                    context_length=32000
+                ),
+            ]
     
     def chat(
         self,
@@ -107,29 +117,15 @@ class PerplexityProvider(BaseProvider):
         max_tokens: int = 512,
         **kwargs
     ) -> ChatResponse:
-        """Generate chat completion using Perplexity."""
+        """Generate chat completion using Mistral."""
         try:
             client = self._get_client(credentials)
             
             # Use MessageAdapter for OpenAI-compatible format
             openai_messages = MessageAdapter.to_openai(messages)
             
-            # Map standard parameters to Perplexity equivalents
+            # Map standard parameters to Mistral equivalents
             mapped_params = ParameterMapper.map_params(kwargs, self.id)
-            
-            # 2025 best practices: top_p=0.9 for nucleus sampling, frequency_penalty for citation diversity
-            # Perplexity-specific parameters must go in extra_body when using OpenAI client
-            extra_body = {}
-            
-            # Disable search features to prevent returning web snippets instead of answers
-            # These are Perplexity-specific params documented at:
-            # https://docs.perplexity.ai/guides/chat-completions-guide
-            if kwargs.get("disable_search", True):  # Default to disabling search for RAG use case
-                extra_body["search_domain_filter"] = []  # Empty list disables domain filtering
-                extra_body["return_images"] = False
-                extra_body["return_related_questions"] = False
-                # Note: search_recency_filter and return_citations are left unset
-                # return_citations is NOT a documented parameter
             
             response = client.chat.completions.create(
                 model=model,
@@ -137,8 +133,6 @@ class PerplexityProvider(BaseProvider):
                 temperature=temperature,
                 max_tokens=max_tokens,
                 top_p=mapped_params.get("top_p", 0.9),
-                frequency_penalty=mapped_params.get("frequency_penalty", 0.3),
-                extra_body=extra_body if extra_body else None,
             )
             
             content = response.choices[0].message.content or ""
@@ -160,10 +154,10 @@ class PerplexityProvider(BaseProvider):
         except Exception as e:
             error_msg = str(e).lower()
             if "rate limit" in error_msg:
-                raise ProviderRateLimitError(f"Perplexity rate limit exceeded: {str(e)}")
+                raise ProviderRateLimitError(f"Mistral rate limit exceeded: {str(e)}")
             elif "context" in error_msg or "maximum" in error_msg:
                 raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
-            raise ProviderError(f"Perplexity chat failed: {str(e)}")
+            raise ProviderError(f"Mistral chat failed: {str(e)}")
 
 
 class GoogleProvider(BaseProvider):

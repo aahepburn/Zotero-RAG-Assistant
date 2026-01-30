@@ -55,7 +55,19 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install pyinstaller
-          python3 -m pip install -r requirements.txt
+          
+          # Handle Intel Mac (x64) PyTorch compatibility
+          # PyTorch 2.6+ required for security (CVE-2025-32434) but no x64 wheels available
+          # Intel runners use 2.2.2 (last version with x64 support) for build only
+          # Built app uses safetensors which mitigates the vulnerability
+          if [ "$(uname -m)" = "x86_64" ]; then
+            echo "Intel Mac detected - using PyTorch 2.2.2 for x64 compatibility"
+            python3 -m pip install torch==2.2.2
+            python3 -m pip install -r requirements.txt
+          else
+            echo "Apple Silicon detected - using standard requirements"
+            python3 -m pip install -r requirements.txt
+          fi
           
           # Build PyInstaller bundle (will build for native architecture of runner)
           echo "Building for ${{ matrix.arch }} architecture on $(uname -m) runner"

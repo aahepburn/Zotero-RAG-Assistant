@@ -11,7 +11,7 @@ from .ollama import OllamaProvider
 from .openai import OpenAIProvider
 from .anthropic import AnthropicProvider
 from .additional import (
-    PerplexityProvider,
+    MistralProvider,
     GoogleProvider,
     GroqProvider,
     OpenRouterProvider,
@@ -58,7 +58,7 @@ def _initialize_providers():
         OllamaProvider(),
         OpenAIProvider(),
         AnthropicProvider(),
-        PerplexityProvider(),
+        MistralProvider(),
         GoogleProvider(),
         GroqProvider(),
         OpenRouterProvider(),
