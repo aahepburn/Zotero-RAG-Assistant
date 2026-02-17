@@ -1,6 +1,65 @@
 # backend/main.py
 # uvicorn backend.main:app --reload
-from fastapi import FastAPI, Query, Body
+
+import os
+import sys
+import logging
+
+# Suppress gRPC verbose error logging BEFORE any imports
+# (known issue with google-generativeai package)
+os.environ['GRPC_VERBOSITY'] = 'ERROR'
+os.environ['GRPC_TRACE'] = ''
+os.environ['GRPC_ENABLE_FORK_SUPPORT'] = '0'
+
+# Custom stderr filter to suppress gRPC plugin_credentials errors
+class StderrFilter:
+    """Filter out known harmless gRPC errors from stderr."""
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.buffer = ""
+        # Keywords that indicate gRPC errors to suppress
+        self.suppress_keywords = [
+            'plugin_credentials.cc',
+            'validate_metadata_from_plugin',
+            'INTERNAL:Illegal header value',
+            'Plugin added invalid metadata',
+            'E0000 00:00:',  # gRPC error prefix format
+        ]
+        
+    def write(self, text):
+        # Accumulate text in buffer for multi-line error detection
+        self.buffer += text
+        
+        # Check if any line in buffer should be suppressed
+        lines = self.buffer.split('\n')
+        
+        # Keep the last incomplete line in buffer
+        self.buffer = lines[-1] if not text.endswith('\n') else ""
+        
+        # Process complete lines
+        for line in lines[:-1] if not text.endswith('\n') else lines:
+            # Check if this line should be suppressed
+            should_suppress = any(keyword in line for keyword in self.suppress_keywords)
+            
+            if not should_suppress and line:  # Don't print empty lines from suppressed content
+                self.original_stderr.write(line + '\n')
+        
+    def flush(self):
+        # Flush any remaining buffer content
+        if self.buffer and not any(keyword in self.buffer for keyword in self.suppress_keywords):
+            self.original_stderr.write(self.buffer)
+            self.buffer = ""
+        self.original_stderr.flush()
+
+# Install the stderr filter
+_original_stderr = sys.stderr
+sys.stderr = StderrFilter(_original_stderr)
+
+# Configure logging to filter gRPC errors
+logging.getLogger('grpc').setLevel(logging.CRITICAL)
+logging.getLogger('google.auth').setLevel(logging.WARNING)
+
+from fastapi import FastAPI, Query, Body, BackgroundTasks
 from typing import Optional
 from backend.zoteroitem import ZoteroItem
 from backend.external_api_utils import fetch_google_book_reviews, fetch_semantic_scholar_data
@@ -11,6 +70,8 @@ from backend.interface import ZoteroChatbot
 from backend.vector_db import ChromaClient
 from backend.embed_utils import get_embedding
 from backend.profile_manager import ProfileManager
+from backend.metadata_version import check_metadata_compatibility
+from backend.metadata_migration import MetadataMigration
 import os
 import json
 import warnings
@@ -73,8 +134,11 @@ def load_settings(profile_id: str = None):
             raise RuntimeError("No active profile")
         profile_id = active['id']
     
+    print(f"[load_settings] Loading settings for profile: {profile_id}")
+    
     # Use profile-specific chroma path by default
     profile_chroma_path = profile_manager.get_profile_chroma_path(profile_id)
+    print(f"[load_settings] Profile chroma path: {profile_chroma_path}")
     
     default_settings = {
         "activeProviderId": "ollama",
@@ -87,6 +151,12 @@ def load_settings(profile_id: str = None):
                 "enabled": True,
                 "credentials": {
                     "base_url": "http://localhost:11434"
+                }
+            },
+            "lmstudio": {
+                "enabled": False,
+                "credentials": {
+                    "base_url": "http://localhost:1234"
                 }
             },
             "openai": {
@@ -177,11 +247,14 @@ def load_settings(profile_id: str = None):
                         if provider_id not in merged["providers"]:
                             merged["providers"][provider_id] = default_settings["providers"][provider_id]
                 
+                print(f"[load_settings] Merged settings - zoteroPath: {merged.get('zoteroPath')}, chromaPath: {merged.get('chromaPath')}, embeddingModel: {merged.get('embeddingModel')}")
                 return merged
         except Exception as e:
-            print(f"Error loading settings: {e}")
+            print(f"[load_settings] Error loading settings: {e}")
+            print(f"[load_settings] Returning default settings - zoteroPath: {default_settings.get('zoteroPath')}, chromaPath: {default_settings.get('chromaPath')}")
             return default_settings
     else:
+        print(f"[load_settings] No saved settings, returning defaults - zoteroPath: {default_settings.get('zoteroPath')}, chromaPath: {default_settings.get('chromaPath')}")
         return default_settings
 
 
@@ -370,10 +443,60 @@ def search_items(
 def get_reviews(query: str):
     """Makes a call to the Google Books API to retrieve reviews."""
     try:
-        reviews = fetch_google_book_reviews(query)
+        # query is expected to be ISBN
+        reviews = fetch_google_book_reviews(query, google_api_key)
         return {"reviews": reviews}
     except Exception as e:
         return {"error": str(e)}
+
+@app.post("/api/external/semantic_scholar")
+def lookup_semantic_scholar(payload: dict = Body(...)):
+    """
+    Look up paper metadata on Semantic Scholar.
+    
+    Request body:
+        {
+            "doi": "10.xxx/xxx",      // Optional - preferred method
+            "title": "Paper title",   // Optional - fallback
+            "authors": "Author names" // Optional - helps with matching
+        }
+    
+    Returns:
+        {
+            "success": true/false,
+            "data": {
+                "title": str,
+                "abstract": str,
+                "year": int,
+                "authors": [str],
+                "citation_count": int,
+                "citations": [dict],
+                "references": [dict],
+                "url": str,
+                "doi": str
+            },
+            "error": str (if success=false)
+        }
+    """
+    try:
+        result = fetch_semantic_scholar_data(
+            doi=payload.get('doi'),
+            title=payload.get('title'),
+            authors=payload.get('authors')
+        )
+        
+        if result:
+            return {"success": True, "data": result}
+        else:
+            return {
+                "success": False,
+                "error": "Paper not found on Semantic Scholar"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 @app.post("/api/index_library")
 def index_library(payload: dict = Body(default={"incremental": True})):
@@ -417,9 +540,23 @@ def chat(query: str, item_ids: Optional[str] = Query("", description="Comma sepa
 
 @app.post("/api/chat")
 def chat_post(payload: dict = Body(...)):
-    """POST-style chat endpoint that accepts JSON body: {"query": "...", "item_ids": ["id1","id2"], "session_id": "..."}
+    """POST-style chat endpoint that accepts JSON body: 
+    {
+        "query": "...", 
+        "item_ids": ["id1","id2"], 
+        "session_id": "...",
+        "use_metadata_filters": true/false,
+        "manual_filters": {
+            "year_min": 2020,
+            "year_max": 2023,
+            "tags": ["NLP", "ML"],
+            "collections": ["Research"]
+        },
+        "use_rrf": true/false
+    }
+    
     This mirrors the GET `/chat` endpoint but is easier for clients that send JSON.
-    Supports stateful conversations via session_id.
+    Supports stateful conversations via session_id and metadata filtering.
     """
     try:
         query = payload.get("query")
@@ -437,11 +574,19 @@ def chat_post(payload: dict = Body(...)):
 
         # Extract session_id for stateful conversation
         session_id = payload.get("session_id")
+        
+        # Extract metadata filtering options
+        use_metadata_filters = payload.get("use_metadata_filters", False)
+        manual_filters = payload.get("manual_filters")
+        use_rrf = payload.get("use_rrf", True)
 
         payload_out = chatbot.chat(
             query, 
             filter_item_ids=filter_ids if filter_ids else None,
-            session_id=session_id
+            session_id=session_id,
+            use_metadata_filters=use_metadata_filters,
+            manual_filters=manual_filters,
+            use_rrf=use_rrf,
         )
         print(f"Endpoint returning payload_out with generated_title: {payload_out.get('generated_title')}")
         return payload_out
@@ -501,17 +646,27 @@ def index_stats():
     try:
         # Get indexed item IDs
         indexed_ids = chatbot.chroma.get_indexed_item_ids()
-        
+
         # Get total chunks
         total_chunks = chatbot.chroma.get_document_count()
-        
+
         # Get all Zotero items
         raw_items = chatbot.zlib.search_parent_items_with_pdfs()
         zotero_item_ids = {str(it['item_id']) for it in raw_items}
-        
+
+        # Debug: log sample IDs from both sets to diagnose mismatch
+        sample_indexed = list(indexed_ids)[:5]
+        sample_zotero = list(zotero_item_ids)[:5]
+        overlap = indexed_ids & zotero_item_ids
+        print(f"[index_stats] indexed_ids({len(indexed_ids)}) samples: {sample_indexed} types: {[type(x) for x in sample_indexed]}")
+        print(f"[index_stats] zotero_ids({len(zotero_item_ids)}) samples: {sample_zotero} types: {[type(x) for x in sample_zotero]}")
+        print(f"[index_stats] overlap: {len(overlap)}")
+        if sample_indexed and sample_zotero:
+            print(f"[index_stats] repr comparison: indexed={[repr(x) for x in sample_indexed[:3]]} zotero={[repr(x) for x in sample_zotero[:3]]}")
+
         # Calculate new items
         new_item_ids = zotero_item_ids - indexed_ids
-        
+
         return {
             "indexed_items": len(indexed_ids),
             "total_chunks": total_chunks,
@@ -523,6 +678,186 @@ def index_stats():
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/api/metadata/version")
+def metadata_version():
+    """Check the current metadata version and whether migration is needed.
+    
+    Returns:
+        - version: Current metadata format version (0, 1, or 2)
+        - migration_needed: Boolean indicating if migration is required
+        - message: User-friendly description
+        - can_use_filtering: Whether filtering features can be used
+    """
+    try:
+        from backend.metadata_version import MetadataVersionManager, CURRENT_METADATA_VERSION
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        manager = MetadataVersionManager(chatbot.chroma)
+        version = manager.detect_metadata_version()
+        migration_needed = manager.is_migration_needed()
+        message = manager.get_migration_message()
+        
+        # Get sample metadata for debugging
+        sample_results = chatbot.chroma.collection.get(limit=3, include=['metadatas'])
+        sample_meta = []
+        for meta in sample_results.get('metadatas', [])[:3]:
+            sample_meta.append({
+                'year': meta.get('year'),
+                'year_type': type(meta.get('year')).__name__,
+                'has_tags': 'tags' in meta,
+                'has_collections': 'collections' in meta,
+            })
+        
+        print(f"Metadata version check: version={version}, migration_needed={migration_needed}")
+        print(f"Sample metadata: {sample_meta}")
+        
+        return {
+            "version": version,
+            "migration_needed": migration_needed,
+            "message": message,
+            "can_use_filtering": version == CURRENT_METADATA_VERSION,
+            "sample_metadata": sample_meta,  # For debugging
+            "total_chunks": len(sample_results.get('ids', []))
+        }
+    except Exception as e:
+        print(f"Error checking metadata version: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+@app.post("/api/metadata/count_filtered")
+async def count_filtered_items(body: dict):
+    """
+    Count how many items and chunks match the given filters.
+    
+    Used by the Scope panel to show an approximate count of filtered items.
+    
+    Request body:
+        - year_min: Optional minimum year
+        - year_max: Optional maximum year
+        - tags: Optional list of tags
+        - collections: Optional list of collections
+        - title: Optional title substring
+        - author: Optional author substring
+        - item_types: Optional list of item types
+    
+    Returns:
+        - unique_items: Number of unique items matching filters
+        - total_chunks: Total number of chunks matching filters
+    """
+    try:
+        year_min = body.get("year_min")
+        year_max = body.get("year_max")
+        tags = body.get("tags", [])
+        collections = body.get("collections", [])
+        title = body.get("title")
+        author = body.get("author")
+        item_types = body.get("item_types", [])
+        
+        counts = chatbot.chroma.count_items_matching_filters(
+            year_min=year_min,
+            year_max=year_max,
+            tags=tags if tags else None,
+            collections=collections if collections else None,
+            title=title if title else None,
+            author=author if author else None,
+            item_types=item_types if item_types else None,
+        )
+        
+        return counts
+    except Exception as e:
+        import traceback
+        print(f"Error counting filtered items: {e}")
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+@app.post("/api/metadata/migrate")
+async def metadata_migrate(background_tasks: BackgroundTasks):
+    """Migrate metadata to current format.
+    
+    Updates metadata in-place without re-embedding.
+    This runs as a background task.
+    
+    Returns:
+        - status: "started", "completed", "not_needed", or "error"
+        - message: Description of the operation
+        - summary: Migration statistics (if completed)
+    """
+    try:
+        from backend.metadata_version import MetadataVersionManager
+        from backend.metadata_migration import MetadataMigration
+        
+        # Check if migration is needed
+        manager = MetadataVersionManager(chatbot.chroma)
+        version = manager.detect_metadata_version()
+        migration_needed = manager.is_migration_needed()
+        
+        if not migration_needed:
+            return {
+                "status": "not_needed",
+                "message": "Metadata is already in current format",
+                "version": version
+            }
+        
+        # Run migration synchronously for now (can be backgrounded later)
+        migration = MetadataMigration(chatbot.chroma, chatbot.zlib)
+        summary = migration.migrate_all_metadata()
+        
+        # Clear the cached version so next check will re-detect
+        manager._cached_version = None
+        
+        return {
+            "status": "completed",
+            "message": "Migration completed successfully",
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/api/metadata/sync")
+async def metadata_sync():
+    """Sync metadata from Zotero without re-embedding.
+    
+    Fetches current metadata from Zotero database and updates ChromaDB
+    in-place without regenerating embeddings. Useful when you've updated
+    titles, authors, tags, or other metadata in Zotero and want to refresh
+    the indexed data.
+    
+    Returns:
+        - status: "completed" or "error"
+        - message: Description of the operation
+        - summary: Sync statistics (chunks updated, time elapsed, etc.)
+    """
+    try:
+        from backend.metadata_migration import MetadataMigration
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("[metadata_sync] Starting metadata sync from Zotero...")
+        
+        # Use the migration class to update metadata (it fetches fresh data from Zotero)
+        migration = MetadataMigration(chatbot.chroma, chatbot.zlib)
+        summary = migration.migrate_all_metadata()
+        
+        logger.info(f"[metadata_sync] Sync completed: {summary}")
+        
+        return {
+            "status": "completed",
+            "message": f"Successfully synced metadata for {summary.get('unique_items', 0)} items",
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"[metadata_sync] Sync error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
 
 
 @app.get("/api/diagnose_unindexed")
@@ -754,20 +1089,61 @@ def list_provider_models(provider_id: str):
 
 @app.post("/api/providers/{provider_id}/validate")
 def validate_provider(provider_id: str, credentials: dict = Body(...)):
-    """Validate credentials for a specific provider."""
+    """Validate credentials for a specific provider.
+    
+    For providers with dynamic model discovery (Google, OpenAI, Mistral, Groq, OpenRouter),
+    also returns dynamically discovered models.
+    """
     from backend.model_providers import get_provider
     try:
         provider = get_provider(provider_id)
         if not provider:
             return {"error": f"Provider '{provider_id}' not found", "valid": False}
         
-        # Use provided credentials or get from settings
-        creds = credentials.get("credentials", {})
-        if not creds:
-            settings = load_settings()
-            provider_config = settings.get("providers", {}).get(provider_id, {})
-            creds = provider_config.get("credentials", {})
+        # Always load credentials from stored settings for validation
+        # This ensures we test the actual saved configuration, not form data
+        settings = load_settings()
+        provider_config = settings.get("providers", {}).get(provider_id, {})
+        creds = provider_config.get("credentials", {})
         
+        print(f"[Validation] Loading stored credentials for {provider_id}")
+        if creds.get("api_key"):
+            print(f"[Validation] Found API key (length: {len(creds['api_key'])})")
+        else:
+            print(f"[Validation] No API key found in settings")
+        
+        # For providers with dynamic discovery, use enhanced validation
+        providers_with_discovery = ["google", "openai", "mistral", "groq", "openrouter", "anthropic"]
+        
+        if provider_id in providers_with_discovery and hasattr(provider, 'validate_credentials_and_list_models'):
+            result = provider.validate_credentials_and_list_models(creds)
+            
+            if result["valid"]:
+                # Convert ModelInfo objects to dicts for JSON serialization
+                models_dict = [
+                    {
+                        "id": m.id,
+                        "name": m.name,
+                        "description": m.description,
+                        "context_length": m.context_length
+                    }
+                    for m in result["models"]
+                ]
+                
+                return {
+                    "valid": True,
+                    "provider": provider_id,
+                    "models": models_dict,
+                    "message": result["message"]
+                }
+            else:
+                return {
+                    "valid": False,
+                    "provider": provider_id,
+                    "error": result.get("error", "Validation failed")
+                }
+        
+        # For other providers (Anthropic, Ollama, LM Studio), use standard validation
         is_valid = provider.validate_credentials(creds)
         return {"valid": is_valid, "provider": provider_id}
     except Exception as e:
@@ -826,13 +1202,69 @@ def provider_status(provider_id: str):
         return {"status": "error", "error": str(e)}
 
 
+@app.get("/api/library/tags")
+def list_library_tags():
+    """
+    Get all unique tags from the Zotero library.
+    
+    Returns:
+        {
+            "tags": [str] - List of tag names sorted alphabetically
+        }
+    """
+    try:
+        tags = chatbot.zlib.get_all_tags()
+        return {"tags": tags}
+    except Exception as e:
+        return {"error": str(e), "tags": []}
+
+
+@app.get("/api/library/collections")
+def list_library_collections():
+    """
+    Get all collections from the Zotero library with item counts.
+    
+    Returns:
+        {
+            "collections": [
+                {"name": str, "count": int}
+            ]
+        }
+    """
+    try:
+        collections = chatbot.zlib.get_all_collections()
+        return {"collections": collections}
+    except Exception as e:
+        return {"error": str(e), "collections": []}
+
+
+@app.get("/api/library/item_types")
+def list_library_item_types():
+    """
+    Get all item types from the Zotero library with counts.
+    Only includes types for items with PDFs.
+    
+    Returns:
+        {
+            "item_types": [
+                {"name": str, "count": int}
+            ]
+        }
+    """
+    try:
+        item_types = chatbot.zlib.get_all_item_types()
+        return {"item_types": item_types}
+    except Exception as e:
+        return {"error": str(e), "item_types": []}
+
+
 @app.get("/api/settings")
 def get_settings():
     """Get current application settings."""
     try:
         settings = load_settings()
         
-        # Mask API keys for security - don't send full keys to frontend
+        # Mask API keys for security - show only last 3 chars
         masked_settings = settings.copy()
         if "providers" in masked_settings:
             masked_providers = {}
@@ -841,7 +1273,12 @@ def get_settings():
                 if "credentials" in masked_provider:
                     masked_creds = masked_provider["credentials"].copy()
                     if "api_key" in masked_creds and masked_creds["api_key"]:
-                        masked_creds["api_key"] = "***"
+                        # Show last 3 chars, mask the rest
+                        api_key = masked_creds["api_key"]
+                        if len(api_key) > 3:
+                            masked_creds["api_key"] = "•" * (len(api_key) - 3) + api_key[-3:]
+                        else:
+                            masked_creds["api_key"] = "•" * len(api_key)
                     masked_provider["credentials"] = masked_creds
                 masked_providers[provider_id] = masked_provider
             masked_settings["providers"] = masked_providers
@@ -849,6 +1286,42 @@ def get_settings():
         return masked_settings
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/api/detect_api_keys")
+def detect_api_keys():
+    """Detect API keys from environment variables.
+    
+    Returns a dict of provider IDs and whether their API keys are set via environment variables.
+    This helps the UI show warnings when keys are coming from environment rather than 
+    being explicitly configured.
+    """
+    import os
+    
+    # Map of provider IDs to their common environment variable names
+    env_key_mapping = {
+        "openai": ["OPENAI_API_KEY", "OPENAI_KEY"],
+        "anthropic": ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
+        "mistral": ["MISTRAL_API_KEY"],
+        "google": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+        "groq": ["GROQ_API_KEY"],
+        "openrouter": ["OPENROUTER_API_KEY"],
+    }
+    
+    detected = {}
+    for provider_id, env_vars in env_key_mapping.items():
+        for env_var in env_vars:
+            if os.getenv(env_var):
+                detected[provider_id] = {
+                    "detected": True,
+                    "env_var": env_var,
+                    "last_3_chars": os.getenv(env_var)[-3:] if os.getenv(env_var) else ""
+                }
+                break
+        if provider_id not in detected:
+            detected[provider_id] = {"detected": False}
+    
+    return {"detected_keys": detected}
 
 
 @app.get("/api/profiles")
@@ -1006,8 +1479,8 @@ def update_settings(settings: dict = Body(...)):
                     
                     # Merge credentials, preserving masked keys
                     for key, value in new_creds.items():
-                        if key == "api_key" and value == "***":
-                            # Keep existing API key if new value is masked
+                        if key == "api_key" and (value == "***" or (value and "•" in str(value))):
+                            # Keep existing API key if new value is masked (either *** or contains •)
                             if "api_key" in current_creds:
                                 updated_settings["providers"][provider_id]["credentials"]["api_key"] = current_creds["api_key"]
                         else:

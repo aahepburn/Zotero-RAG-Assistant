@@ -61,6 +61,107 @@ class OpenAIProvider(BaseProvider):
             else:
                 raise ProviderError(f"OpenAI validation failed: {str(e)}")
     
+    def validate_credentials_and_list_models(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate credentials AND return available models dynamically.
+        
+        Returns:
+            {
+                "valid": bool,
+                "models": List[ModelInfo],
+                "message": str
+            }
+        """
+        try:
+            client = self._get_client(credentials)
+            print(f"[OpenAI Provider] Fetching dynamic models via client.models.list()...")
+            
+            models_response = client.models.list()
+            available_model_ids = {model.id for model in models_response.data}
+            
+            # Define curated models for academic use
+            curated_models = {
+                "gpt-4o": ModelInfo(
+                    id="gpt-4o",
+                    name="GPT-4o",
+                    description="Most capable model, best for complex reasoning",
+                    context_length=128000
+                ),
+                "gpt-4o-mini": ModelInfo(
+                    id="gpt-4o-mini",
+                    name="GPT-4o Mini",
+                    description="Fast and affordable, good for most tasks",
+                    context_length=128000
+                ),
+                "o1-preview": ModelInfo(
+                    id="o1-preview",
+                    name="o1 Preview",
+                    description="Advanced reasoning model",
+                    context_length=128000
+                ),
+                "o1-mini": ModelInfo(
+                    id="o1-mini",
+                    name="o1 Mini",
+                    description="Fast reasoning model",
+                    context_length=128000
+                ),
+                "gpt-4-turbo": ModelInfo(
+                    id="gpt-4-turbo",
+                    name="GPT-4 Turbo",
+                    description="Previous generation flagship model",
+                    context_length=128000
+                ),
+                "gpt-3.5-turbo": ModelInfo(
+                    id="gpt-3.5-turbo",
+                    name="GPT-3.5 Turbo",
+                    description="Fast and economical",
+                    context_length=16385
+                ),
+            }
+            
+            # Filter to only models the user has access to
+            models = [info for model_id, info in curated_models.items() if model_id in available_model_ids]
+            
+            # If no curated models found, include all GPT models
+            if not models:
+                models = [
+                    ModelInfo(
+                        id=model.id,
+                        name=model.id,
+                        description="OpenAI model",
+                        context_length=None
+                    )
+                    for model in models_response.data
+                    if "gpt" in model.id.lower() or "o1" in model.id.lower()
+                ]
+            
+            for model in models:
+                print(f"[OpenAI Provider]   Found: {model.id}")
+            
+            print(f"[OpenAI Provider] Successfully discovered {len(models)} models")
+            
+            return {
+                "valid": True,
+                "models": models,
+                "message": f"Success! Found {len(models)} models available."
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            error_msg_lower = error_msg.lower()
+            
+            if "authentication" in error_msg_lower or "api key" in error_msg_lower or "401" in error_msg_lower:
+                return {
+                    "valid": False,
+                    "models": [],
+                    "error": f"Invalid OpenAI API key: {error_msg}"
+                }
+            
+            return {
+                "valid": False,
+                "models": [],
+                "error": f"OpenAI validation failed: {error_msg}"
+            }
+    
     def list_models(self, credentials: Dict[str, Any]) -> List[ModelInfo]:
         """
         List available OpenAI models.
@@ -179,9 +280,43 @@ class OpenAIProvider(BaseProvider):
             )
             
         except Exception as e:
+            # Import OpenAI error types for specific handling
+            try:
+                from openai import (
+                    AuthenticationError, 
+                    RateLimitError, 
+                    APIConnectionError,
+                    BadRequestError
+                )
+                
+                # Check specific error types first
+                if isinstance(e, AuthenticationError):
+                    raise ProviderAuthenticationError(f"OpenAI authentication failed: {str(e)}")
+                elif isinstance(e, RateLimitError):
+                    # Extract more specific message if available
+                    error_msg = str(e)
+                    if "quota" in error_msg.lower() or "insufficient_quota" in error_msg.lower():
+                        raise ProviderRateLimitError(
+                            "OpenAI quota exceeded. Please check your plan and billing at https://platform.openai.com/account/billing"
+                        )
+                    raise ProviderRateLimitError(f"OpenAI rate limit exceeded: {str(e)}")
+                elif isinstance(e, APIConnectionError):
+                    raise ProviderConnectionError(f"Cannot connect to OpenAI: {str(e)}")
+                elif isinstance(e, BadRequestError):
+                    error_msg = str(e).lower()
+                    if "context" in error_msg or "maximum" in error_msg or "too long" in error_msg:
+                        raise ProviderContextError(f"Context too long for model {model}: {str(e)}")
+            except ImportError:
+                pass  # Fall back to string matching
+            
+            # Fall back to string-based error detection
             error_msg = str(e).lower()
-            if "authentication" in error_msg or "api key" in error_msg:
+            if "authentication" in error_msg or "api key" in error_msg or "401" in error_msg:
                 raise ProviderAuthenticationError(f"OpenAI authentication failed: {str(e)}")
+            elif "quota" in error_msg or "insufficient_quota" in error_msg or "429" in error_msg:
+                raise ProviderRateLimitError(
+                    "OpenAI quota exceeded. Please check your plan and billing at https://platform.openai.com/account/billing"
+                )
             elif "rate limit" in error_msg:
                 raise ProviderRateLimitError(f"OpenAI rate limit exceeded: {str(e)}")
             elif "context length" in error_msg or "maximum context" in error_msg:

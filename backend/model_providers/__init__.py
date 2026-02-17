@@ -8,6 +8,7 @@ for managing provider instances, credentials, and model selection.
 from typing import Dict, Optional, List
 from .base import ModelProvider, Message, ChatResponse, ModelInfo, ProviderError
 from .ollama import OllamaProvider
+from .lmstudio import LMStudioProvider
 from .openai import OpenAIProvider
 from .anthropic import AnthropicProvider
 from .additional import (
@@ -56,6 +57,7 @@ def _initialize_providers():
     """Register all available providers."""
     providers = [
         OllamaProvider(),
+        LMStudioProvider(),
         OpenAIProvider(),
         AnthropicProvider(),
         MistralProvider(),

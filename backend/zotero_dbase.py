@@ -112,8 +112,10 @@ class ZoteroLibrary:
             GROUP_CONCAT(DISTINCT t.name) AS tags,
             GROUP_CONCAT(DISTINCT c.collectionName) AS collections,
             att.key AS attachment_key,
-            att_path.path AS attachment_path
+            att_path.path AS attachment_path,
+            itemType.typeName AS item_type
         FROM items i
+        JOIN itemTypes itemType ON i.itemTypeID = itemType.itemTypeID
         JOIN itemCreators ic ON i.itemID = ic.itemID
         JOIN creators cr ON ic.creatorID = cr.creatorID
         JOIN itemData d_title ON i.itemID = d_title.itemID AND d_title.fieldID = (SELECT fieldID FROM fields WHERE fieldName = 'title')
@@ -168,10 +170,78 @@ class ZoteroLibrary:
                 'collections': item[6],    
                 'attachment_key': item[7],
                 'attachment_path': item[8],
+                'item_type': item[9] or "",
                 'pdf_path': pdf_full_path
             }
             zotero_items.append(ZoteroItem(filepath=pdf_full_path, metadata=metadata))
         return zotero_items
+    
+    def get_all_tags(self):
+        """Get all unique tags from the library."""
+        with self._cursor() as cur:
+            # Query for tags from items that have PDFs
+            cur.execute("""
+                SELECT DISTINCT t.name
+                FROM tags t
+                INNER JOIN itemTags it ON t.tagID = it.tagID
+                INNER JOIN items i ON it.itemID = i.itemID
+                WHERE i.itemID IN (
+                    SELECT DISTINCT parentItemID
+                    FROM itemAttachments
+                    WHERE contentType = 'application/pdf'
+                    AND parentItemID IS NOT NULL
+                )
+                ORDER BY t.name
+            """)
+            return [row[0] for row in cur.fetchall() if row[0]]
+    
+    def get_all_collections(self):
+        """Get all collections with item counts."""
+        with self._cursor() as cur:
+            # Query for collections and count items with PDFs
+            cur.execute("""
+                SELECT c.collectionName, COUNT(DISTINCT ci.itemID) as item_count
+                FROM collections c
+                LEFT JOIN collectionItems ci ON c.collectionID = ci.collectionID
+                WHERE ci.itemID IN (
+                    SELECT DISTINCT parentItemID
+                    FROM itemAttachments
+                    WHERE contentType = 'application/pdf'
+                    AND parentItemID IS NOT NULL
+                )
+                GROUP BY c.collectionID
+                HAVING item_count > 0
+                ORDER BY c.collectionName
+            """)
+            return [
+                {"name": row[0], "count": row[1]}
+                for row in cur.fetchall()
+                if row[0]
+            ]
+    
+    def get_all_item_types(self):
+        """Get all item types with counts from items with PDFs."""
+        with self._cursor() as cur:
+            # Query for item types and count items with PDFs
+            cur.execute("""
+                SELECT it.typeName, COUNT(DISTINCT i.itemID) as item_count
+                FROM itemTypes it
+                INNER JOIN items i ON it.itemTypeID = i.itemTypeID
+                WHERE i.itemID IN (
+                    SELECT DISTINCT parentItemID
+                    FROM itemAttachments
+                    WHERE contentType = 'application/pdf'
+                    AND parentItemID IS NOT NULL
+                )
+                GROUP BY it.itemTypeID, it.typeName
+                HAVING item_count > 0
+                ORDER BY item_count DESC, it.typeName
+            """)
+            return [
+                {"name": row[0], "count": row[1]}
+                for row in cur.fetchall()
+                if row[0]
+            ]
     
     def close(self):
         """Close thread-local connections. Call this on shutdown."""

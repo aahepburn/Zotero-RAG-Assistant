@@ -5,7 +5,7 @@ import ChatInput from "./ChatInput";
 import ErrorBanner from "../../components/feedback/ErrorBanner";
 
 const ChatView: React.FC = () => {
-  const { messages, loading, error, sendMessage } = useChatContext();
+  const { messages, loading, error, sendMessage, stopGeneration } = useChatContext();
 
   return (
     <div className="chat-view">
@@ -13,7 +13,7 @@ const ChatView: React.FC = () => {
         {error && <ErrorBanner message={error} />}
       </div>
       <ChatMessages messages={messages} loading={loading} />
-      <ChatInput onSend={sendMessage} disabled={loading} />
+      <ChatInput onSend={sendMessage} onStop={stopGeneration} disabled={loading} />
     </div>
   );
 };

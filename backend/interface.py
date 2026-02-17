@@ -6,11 +6,18 @@ from backend.pdf import PDF
 from backend.vector_db import ChromaClient
 from backend.embed_utils import get_embedding, rerank_passages
 from backend.model_providers import ProviderManager, Message
-from backend.model_providers.base import ResponseValidator
+from backend.model_providers.base import (
+    ResponseValidator, 
+    ProviderRateLimitError, 
+    ProviderAuthenticationError,
+    ProviderContextError,
+    ProviderError
+)
 from backend.conversation_store import ConversationStore
 from backend.academic_prompts import AcademicPrompts, AcademicGenerationParams
 from backend.query_condenser import QueryCondenser
 import os
+import re
 from collections import OrderedDict
 import threading
 import time
@@ -163,7 +170,16 @@ class ZoteroChatbot:
                 authors = meta_src.get("authors") or ""
                 tags = meta_src.get("tags") or ""
                 collections = meta_src.get("collections") or ""
-                year = meta_src.get("date") or ""
+                item_type = meta_src.get("item_type") or ""
+                
+                # Parse year as integer (supports format like "2020-01-15" or just "2020")
+                year_str = meta_src.get("date") or ""
+                year = 0  # Default to 0 instead of None (ChromaDB doesn't accept None)
+                if year_str:
+                    match = re.search(r'\b(19|20)\d{2}\b', year_str)
+                    if match:
+                        year = int(match.group(0))
+                
                 pdf_path = meta_src.get("pdf_path") or ""
 
                 metas = []
@@ -175,9 +191,10 @@ class ZoteroChatbot:
                         "authors": authors,
                         "tags": tags,
                         "collections": collections,
-                        "year": year,
+                        "item_type": item_type,
+                        "year": year,  # Integer (0 if unknown)
                         "pdf_path": pdf_path,
-                        "page": chunk_info['page'],  # Add page number!
+                        "page": chunk_info.get('page', 0),  # Use 0 if page is None
                     })
 
                 try:
@@ -328,7 +345,16 @@ class ZoteroChatbot:
                 authors = meta_src.get("authors") or ""
                 tags = meta_src.get("tags") or ""
                 collections = meta_src.get("collections") or ""
-                year = meta_src.get("date") or ""
+                item_type = meta_src.get("item_type") or ""
+                
+                # Parse year as integer (supports format like "2020-01-15" or just "2020")
+                year_str = meta_src.get("date") or ""
+                year = 0  # Default to 0 instead of None (ChromaDB doesn't accept None)
+                if year_str:
+                    match = re.search(r'\b(19|20)\d{2}\b', year_str)
+                    if match:
+                        year = int(match.group(0))
+                
                 pdf_path = meta_src.get("pdf_path") or ""
 
                 metas = []
@@ -340,9 +366,10 @@ class ZoteroChatbot:
                         "authors": authors,
                         "tags": tags,
                         "collections": collections,
-                        "year": year,
+                        "item_type": item_type,
+                        "year": year,  # Integer (0 if unknown)
                         "pdf_path": pdf_path,
-                        "page": chunk_info['page'],
+                        "page": chunk_info.get('page', 0),  # Use 0 if page is None
                     })
 
                 try:
@@ -549,20 +576,35 @@ class ZoteroChatbot:
             include_reasoning=True  # Enable chain-of-thought for complex questions
         )
 
-    def chat(self, query, filter_item_ids=None, session_id=None):
+    def chat(
+        self,
+        query,
+        filter_item_ids=None,
+        session_id=None,
+        use_metadata_filters=False,
+        manual_filters=None,
+        use_rrf=True,
+    ):
         """
         Process a chat query with stateful conversation history using Perplexity-style architecture.
         
         Architecture:
         1. Load conversation history (if session exists)
         2. CONDENSE: Convert follow-up questions to standalone queries
-        3. RETRIEVE: Use standalone query for vector search
+        3. RETRIEVE: Use standalone query for vector search (with optional metadata filtering)
         4. GENERATE: Build messages and call LLM
         
         Args:
             query: User's question (may be a follow-up with pronouns/context references)
             filter_item_ids: Optional list of Zotero item IDs to filter search
             session_id: Optional session ID for conversation continuity
+            use_metadata_filters: Whether to extract metadata filters from query
+            manual_filters: Manual metadata filters dict with keys:
+                - year_min: int
+                - year_max: int
+                - tags: list of strings
+                - collections: list of strings
+            use_rrf: Whether to use RRF hybrid search (default True)
             
         Returns:
             Dictionary with summary, citations, and snippets
@@ -604,33 +646,111 @@ class ZoteroChatbot:
             print(f"   Using original query: '{query}'")
         
         # STEP 3: RETRIEVE using the standalone/condensed query
-        # Use hybrid search (dense + sparse) for best results
-        db_filter = {"item_id": {"$in": filter_item_ids}} if filter_item_ids else None
-        search_prompt = self.build_search_prompt(retrieval_query)  # Use condensed query!
+        # Build metadata filter if enabled
+        metadata_where = None
+        if use_metadata_filters or manual_filters:
+            from backend.metadata_extractor import extract_metadata_filters
+            from backend.metadata_utils import build_metadata_where_clause, merge_where_clauses
+            
+            # Extract from query if enabled
+            if use_metadata_filters:
+                extracted = extract_metadata_filters(retrieval_query, self.provider_manager)
+                if extracted["has_filters"]:
+                    metadata_where = build_metadata_where_clause(
+                        year_min=extracted.get("year_min"),
+                        year_max=extracted.get("year_max"),
+                        tags=extracted.get("tags"),
+                        collections=extracted.get("collections"),
+                        title=extracted.get("title"),
+                        author=extracted.get("author"),
+                        item_types=extracted.get("item_types"),
+                    )
+                    print(f"\nMETADATA FILTERS (extracted): {extracted}")
+            
+            # Apply manual filters if provided
+            if manual_filters:
+                manual_where = build_metadata_where_clause(
+                    year_min=manual_filters.get("year_min"),
+                    year_max=manual_filters.get("year_max"),
+                    tags=manual_filters.get("tags"),
+                    collections=manual_filters.get("collections"),
+                    title=manual_filters.get("title"),
+                    author=manual_filters.get("author"),
+                    item_types=manual_filters.get("item_types"),
+                )
+                metadata_where = merge_where_clauses(metadata_where, manual_where)
+                print(f"\nMETADATA FILTERS (manual): {manual_filters}")
         
-        results = self.chroma.query_hybrid(
-            query=search_prompt, 
-            k=15, 
-            where=db_filter, 
-            embedding_model_id=self.embedding_model_id
-        ) or {}
+        # Combine with item_id filter
+        item_id_where = {"item_id": {"$in": filter_item_ids}} if filter_item_ids else None
+        from backend.metadata_utils import merge_where_clauses
+        db_filter = merge_where_clauses(item_id_where, metadata_where)
+        
+        if db_filter:
+            print(f"\nFINAL WHERE CLAUSE: {db_filter}")
+        
+        # Use hybrid search (dense + sparse) for best results
+        search_prompt = self.build_search_prompt(retrieval_query)  # Use condensed query!
+
+        # Retrieve more candidates when filters are active (narrower corpus → go deeper)
+        retrieval_k = 25 if db_filter else 15
+        rerank_top_k = 15 if db_filter else 10
+
+        if use_rrf:
+            # Use RRF hybrid search for better fusion
+            results = self.chroma.query_hybrid_rrf(
+                query=search_prompt,
+                k=retrieval_k,
+                where=db_filter,
+                embedding_model_id=self.embedding_model_id,
+            ) or {}
+        else:
+            # Use traditional hybrid search
+            results = self.chroma.query_hybrid(
+                query=search_prompt,
+                k=retrieval_k,
+                where=db_filter,
+                embedding_model_id=self.embedding_model_id
+            ) or {}
 
         docs_outer = results.get("documents", [[]])
         metas_outer = results.get("metadatas", [[]])
         docs = docs_outer[0] if docs_outer else []
         metas = metas_outer[0] if metas_outer else []
-        
+
+        # Fallback: if auto-extracted filter produced zero results, retry without it.
+        # Manual filters are intentional, so we don't fall back for those.
+        if not docs and db_filter is not None and use_metadata_filters and not manual_filters:
+            print(f"\nFALLBACK: auto-extracted filter returned 0 results — retrying unfiltered")
+            fallback_fn = self.chroma.query_hybrid_rrf if use_rrf else self.chroma.query_hybrid
+            fallback_results = fallback_fn(
+                query=search_prompt,
+                k=15,
+                where=None,
+                embedding_model_id=self.embedding_model_id,
+            ) or {}
+            docs = (fallback_results.get("documents", [[]])[0]) or []
+            metas = (fallback_results.get("metadatas", [[]])[0]) or []
+
         # RE-RANK using cross-encoder for better relevance
         if docs:
-            ranked = rerank_passages(retrieval_query, docs, top_k=10)  # Use condensed query for ranking!
+            ranked = rerank_passages(retrieval_query, docs, top_k=rerank_top_k)  # Use condensed query for ranking!
             docs = [docs[idx] for idx, score in ranked]
             metas = [metas[idx] for idx, score in ranked]
+
+        # Detect focused queries and relax caps so deep single-document questions
+        # get enough context. Two signals trigger focused mode:
+        #   1. An active filter (user explicitly narrowed the library) — always go deeper
+        #   2. Results naturally concentrated in ≤2 papers (semantically focused query)
+        unique_papers = {meta.get("title") for meta in metas if meta.get("title")}
+        is_focused_query = db_filter is not None or len(unique_papers) <= 2
+        max_snippets_per_paper = 8 if is_focused_query else 3
+        max_total_snippets = 10 if is_focused_query else 6
 
         # Build snippets and citation map with page numbers
         snippets = []
         citation_map = OrderedDict()
         paper_snippet_count = {}
-        max_snippets_per_paper = 3
 
         for doc, meta in zip(docs, metas):
             title = meta.get("title") or "Untitled"
@@ -643,7 +763,7 @@ class ZoteroChatbot:
             paper_id = f"{title}_{year}"
             if paper_snippet_count.get(paper_id, 0) >= max_snippets_per_paper:
                 continue
-            
+
             paper_snippet_count[paper_id] = paper_snippet_count.get(paper_id, 0) + 1
 
             if key not in citation_map:
@@ -660,8 +780,8 @@ class ZoteroChatbot:
                 "pdf_path": pdf_path,
                 "page": page,
             })
-            
-            if len(snippets) >= 6:
+
+            if len(snippets) >= max_total_snippets:
                 break
 
         # Build citations list
@@ -746,6 +866,8 @@ class ZoteroChatbot:
         
         print(f"\nLLM GENERATION: Calling provider with temp={gen_params['temperature']}")
         
+        reasoning_content = None
+        
         try:
             response = self.provider_manager.chat(
                 messages=messages,
@@ -755,7 +877,22 @@ class ZoteroChatbot:
                 top_k=gen_params["top_k"],
                 repeat_penalty=gen_params["repeat_penalty"]
             )
-            summary = response.content
+            raw_content = response.content
+            
+            # Extract <think>...</think> content if present
+            import re
+            think_pattern = r'<think>(.*?)</think>'
+            think_matches = re.findall(think_pattern, raw_content, re.DOTALL)
+            
+            if think_matches:
+                # Extract the thinking content
+                reasoning_content = '\n\n'.join(think_matches).strip()
+                # Remove the <think> tags from the main response
+                summary = re.sub(think_pattern, '', raw_content, flags=re.DOTALL).strip()
+                print(f"\nEXTRACTED REASONING: ({len(reasoning_content)} chars)")
+                print(f"   First 200 chars: {reasoning_content[:200].replace(chr(10), ' ')}...")
+            else:
+                summary = raw_content
             
             print(f"\nLLM RESPONSE received ({len(summary)} chars)")
             print(f"   First 200 chars: {summary[:200].replace(chr(10), ' ')}...")
@@ -795,6 +932,58 @@ class ZoteroChatbot:
             # Save assistant response to conversation history
             if session_id:
                 self.conversation_store.append_message(session_id, "assistant", summary)
+        except ProviderRateLimitError as e:
+            # Specific handling for rate limit errors
+            print(f"\n{'='*80}")
+            print(f"RATE LIMIT ERROR")
+            print(f"{'='*80}")
+            print(f"Provider: {self.provider_manager.active_provider_id}")
+            print(f"Error message: {str(e)}")
+            print(f"{'='*80}\n")
+            
+            # Return user-friendly error message
+            provider_name = self.provider_manager.active_provider_id.title()
+            summary = (
+                f"{provider_name} Rate Limit Exceeded\n\n"
+                f"Your {provider_name} API account has exceeded its quota. "
+                f"Please check your billing and plan details:\n\n"
+                f"• OpenAI: https://platform.openai.com/account/billing\n"
+                f"• Anthropic: https://console.anthropic.com/settings/plans\n"
+                f"• Google: https://console.cloud.google.com/billing\n\n"
+                f"You can switch to a different provider in Settings or add credits to your account."
+            )
+        except ProviderAuthenticationError as e:
+            # Specific handling for authentication errors
+            print(f"\n{'='*80}")
+            print(f"AUTHENTICATION ERROR")
+            print(f"{'='*80}")
+            print(f"Provider: {self.provider_manager.active_provider_id}")
+            print(f"Error message: {str(e)}")
+            print(f"{'='*80}\n")
+            
+            provider_name = self.provider_manager.active_provider_id.title()
+            summary = (
+                f"{provider_name} Authentication Failed\n\n"
+                f"Your API key appears to be invalid or has expired. "
+                f"Please check your API key in Settings and ensure it's correct."
+            )
+        except ProviderContextError as e:
+            # Specific handling for context length errors
+            print(f"\n{'='*80}")
+            print(f"CONTEXT LENGTH ERROR")
+            print(f"{'='*80}")
+            print(f"Provider: {self.provider_manager.active_provider_id}")
+            print(f"Model: {self.provider_manager.get_active_model()}")
+            print(f"Error message: {str(e)}")
+            print(f"{'='*80}\n")
+            
+            model_name = self.provider_manager.get_active_model()
+            summary = (
+                f"Context Too Long\n\n"
+                f"The conversation history and retrieved documents exceed the maximum context length "
+                f"for {model_name}. Try starting a new chat session or selecting a model with a larger "
+                f"context window."
+            )
         except Exception as e:
             print(f"\n{'='*80}")
             print(f"LLM GENERATION ERROR")
@@ -805,13 +994,21 @@ class ZoteroChatbot:
             print(f"Traceback:\n{traceback.format_exc()}")
             print(f"{'='*80}\n")
             
-            # Fallback behavior
-            if snippets:
-                print("WARNING: Falling back to returning first snippet due to LLM error")
-                summary = snippets[0]["snippet"]
-            else:
-                summary = f"Error: Failed to generate response. {str(e)}"
-                print("ERROR: No snippets available for fallback")
+            # Return helpful error message instead of snippet fallback
+            provider_name = self.provider_manager.active_provider_id.title()
+            model_name = self.provider_manager.get_active_model()
+            error_type = type(e).__name__
+            summary = (
+                f"Model Response Failed\n\n"
+                f"The {provider_name} model ({model_name}) encountered an error and could not generate a response.\n\n"
+                f"**Error Type**: {error_type}\n\n"
+                f"**What to try**:\n"
+                f"• Switch to a different model or provider in Settings\n"
+                f"• Check your API key and account status\n"
+                f"• Try rephrasing your question\n"
+                f"• Start a new chat session if the conversation is very long\n\n"
+                f"*Error details: {str(e)[:200]}*"
+            )
 
         # STEP 6: Generate session title for new sessions
         generated_title = None
@@ -822,14 +1019,21 @@ class ZoteroChatbot:
         print("\n" + "="*80)
         print(f"CHAT TURN COMPLETE")
         print(f"   Citations: {len(citations)}, Snippets: {len(snippets)}")
+        print(f"   Reasoning: {'Yes' if reasoning_content else 'No'}")
         print("="*80 + "\n")
 
-        return {
+        result = {
             "summary": summary,
             "citations": citations,
             "snippets": snippets,
             "generated_title": generated_title,
         }
+        
+        # Add reasoning field only if present
+        if reasoning_content:
+            result["reasoning"] = reasoning_content
+        
+        return result
     
     def _build_first_turn_message(self, question: str, snippets: list[dict]) -> str:
         """Build first turn message with embedded RAG context."""

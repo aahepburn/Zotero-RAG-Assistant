@@ -10,21 +10,27 @@ import { SessionsProvider } from "./contexts/SessionsContext";
 import { ResponseSelectionProvider } from "./contexts/ResponseSelectionContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { ProfileProvider } from "./contexts/ProfileContext";
+import { SearchSettingsProvider } from "./contexts/SearchSettingsContext";
+import { MigrationProvider } from "./contexts/MigrationContext";
 
 const App: React.FC = () => (
 	<Router>
 		<ProfileProvider>
 			<SettingsProvider>
-				<SessionsProvider>
-					<ResponseSelectionProvider>
-						<ChatProvider>
-							<Routes>
-								<Route path="/" element={<AppShell />} />
-								<Route path="/settings" element={<Settings />} />
-							</Routes>
-						</ChatProvider>
-					</ResponseSelectionProvider>
-				</SessionsProvider>
+				<MigrationProvider>
+					<SearchSettingsProvider>
+						<SessionsProvider>
+							<ResponseSelectionProvider>
+								<ChatProvider>
+									<Routes>
+										<Route path="/" element={<AppShell />} />
+										<Route path="/settings" element={<Settings />} />
+									</Routes>
+								</ChatProvider>
+							</ResponseSelectionProvider>
+						</SessionsProvider>
+					</SearchSettingsProvider>
+				</MigrationProvider>
 			</SettingsProvider>
 		</ProfileProvider>
 	</Router>

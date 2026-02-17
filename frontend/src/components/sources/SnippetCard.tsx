@@ -32,9 +32,12 @@ const SnippetCard: React.FC<SnippetCardProps> = ({ snippet, source, index }) => 
     ? authors.split(",")[0].trim() + (authors.split(",").length > 1 ? " et al." : "")
     : null;
   
+  // year=-1 is sentinel value for "no year" (ChromaDB strips None)
+  const yearDisplay = year && year > 0 ? year : null;
+  
   const metadataLine = [
     authorDisplay,
-    year ? `(${year})` : null,
+    yearDisplay ? `(${yearDisplay})` : null,
     page ? `p. ${page}` : null,
   ].filter(Boolean).join(" ");
 

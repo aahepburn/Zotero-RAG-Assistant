@@ -1,0 +1,94 @@
+
+/* Migration Section Styles */
+.migration-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 2px solid;
+}
+
+.migration-status.loading {
+  border-color: var(--border-subtle, #e0e0e0);
+  background: var(--bg-secondary, #f5f5f5);
+  color: var(--text-muted);
+}
+
+.migration-status.needs-update {
+  border-color: #ff9800;
+  background: #fff3e0;
+}
+
+.migration-status.up-to-date {
+  border-color: #4caf50;
+  background: #e8f5e9;
+}
+
+.migration-status.error {
+  border-color: #f44336;
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+.status-indicator {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.status-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.status-text strong {
+  font-weight: 600;
+}
+
+.migration-message {
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.migration-action {
+  margin-top: 16px;
+}
+
+.migration-action button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.migration-action .spinner {
+  width: 16px;
+  height: 16px;
+}
+
+.migration-result {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.migration-result.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #4caf50;
+}
+
+.migration-result.error {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #f44336;
+}

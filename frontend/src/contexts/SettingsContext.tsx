@@ -34,6 +34,8 @@ export interface Settings {
   zoteroPath: string;
   chromaPath: string;
   providers: Record<string, ProviderConfig>;
+  showSystemNotification?: boolean;
+  playSoundNotification?: boolean;
 }
 
 interface SettingsContextType {
@@ -51,6 +53,8 @@ const defaultSettings: Settings = {
   embeddingModel: 'bge-base',
   zoteroPath: '',
   chromaPath: '',
+  showSystemNotification: true,
+  playSoundNotification: false,
   providers: {
     ollama: {
       enabled: true,

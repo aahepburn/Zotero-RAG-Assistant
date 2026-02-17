@@ -1,0 +1,112 @@
+/* Migration Banner Styles */
+.migration-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin: 16px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.migration-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.migration-banner-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.migration-banner-icon svg {
+  width: 24px;
+  height: 24px;
+  color: white;
+}
+
+.migration-banner-text {
+  flex: 1;
+}
+
+.migration-banner-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+.migration-banner-message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.migration-banner-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.migration-banner-actions button {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* Make primary button stand out on gradient background */
+.migration-banner-actions button[class*="primary"] {
+  background: white;
+  color: #667eea;
+  border: none;
+}
+
+.migration-banner-actions button[class*="primary"]:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.migration-banner-actions button[class*="secondary"] {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.migration-banner-actions button[class*="secondary"]:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive layout for smaller screens */
+@media (max-width: 768px) {
+  .migration-banner-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .migration-banner-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .migration-banner-actions button {
+    width: 100%;
+  }
+}

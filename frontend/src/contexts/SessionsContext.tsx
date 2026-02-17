@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { Session, Snippet, Source, Message } from "../types/session";
+import { useProfile } from "./ProfileContext";
+import { apiFetch } from "../api/client";
 
 // Legacy type alias for backward compatibility
 type SourceRef = Source;
@@ -9,6 +11,8 @@ type SessionsShape = {
   currentSessionId: string | null;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  leftActiveTab: string;
+  setLeftActiveTab: (tab: string) => void;
   createSession: (
     initialUserQuestion: string,
     initialAnswer?: string,
@@ -18,6 +22,7 @@ type SessionsShape = {
     customTitle?: string,
     userMessageId?: string,
     assistantMessageId?: string,
+    reasoning?: string
   ) => { sessionId: string; assistantMessageId: string };
   appendMessage: (sessionId: string, message: Message) => void;
   updateSessionTitle: (sessionId: string, newTitle: string) => void;
@@ -37,44 +42,119 @@ function nowISO() {
 }
 
 export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
+  const { activeProfileId, isLoading: profileLoading } = useProfile();
   const [sessions, setSessions] = useState<Record<string, Session>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [leftCollapsed, setLeftCollapsed] = useState<boolean>(false);
   const [rightCollapsed, setRightCollapsed] = useState<boolean>(false);
+  const [leftActiveTab, setLeftActiveTab] = useState<string>(() => {
+    return localStorage.getItem('leftActiveTab') || 'evidence';
+  });
+  const [isLoadingFromBackend, setIsLoadingFromBackend] = useState(false);
 
   const STORAGE_KEY = "zotero_llm_sessions_v1";
 
-  // Load persisted state on mount
+  // Persist active tab when it changes
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed.sessions) setSessions(parsed.sessions);
-      // Validate that the currentSessionId exists in sessions
-      if (parsed.currentSessionId && parsed.sessions && parsed.sessions[parsed.currentSessionId]) {
-        setCurrentSessionId(parsed.currentSessionId);
-      } else {
-        // Clear invalid session ID
-        setCurrentSessionId(null);
-      }
-      if (typeof parsed.leftCollapsed === "boolean") setLeftCollapsed(parsed.leftCollapsed);
-      if (typeof parsed.rightCollapsed === "boolean") setRightCollapsed(parsed.rightCollapsed);
-    } catch (e) {
-      // ignore parse errors
-      console.warn("Failed to load sessions from localStorage", e);
-    }
-  }, []);
+    localStorage.setItem('leftActiveTab', leftActiveTab);
+  }, [leftActiveTab]);
 
-  // Persist when sessions or selection/collapsed state changes
+  // Load sessions from backend when profile becomes available
   useEffect(() => {
+    if (profileLoading || !activeProfileId) {
+      return;
+    }
+
+    const loadFromBackend = async () => {
+      try {
+        setIsLoadingFromBackend(true);
+        console.log(`[SessionsContext] Loading sessions from backend for profile: ${activeProfileId}`);
+        
+        const response = await apiFetch(`/api/profiles/${activeProfileId}/sessions`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`[SessionsContext] Loaded sessions from backend:`, data);
+          
+          if (data.sessions) {
+            setSessions(data.sessions);
+          }
+          if (data.currentSessionId && data.sessions && data.sessions[data.currentSessionId]) {
+            setCurrentSessionId(data.currentSessionId);
+          }
+          if (typeof data.leftCollapsed === 'boolean') {
+            setLeftCollapsed(data.leftCollapsed);
+          }
+          if (typeof data.rightCollapsed === 'boolean') {
+            setRightCollapsed(data.rightCollapsed);
+          }
+        } else {
+          console.warn('[SessionsContext] Failed to load sessions from backend, falling back to localStorage');
+          loadFromLocalStorage();
+        }
+      } catch (err) {
+        console.error('[SessionsContext] Error loading sessions from backend:', err);
+        loadFromLocalStorage();
+      } finally {
+        setIsLoadingFromBackend(false);
+      }
+    };
+
+    const loadFromLocalStorage = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed.sessions) setSessions(parsed.sessions);
+        if (parsed.currentSessionId && parsed.sessions && parsed.sessions[parsed.currentSessionId]) {
+          setCurrentSessionId(parsed.currentSessionId);
+        }
+        if (typeof parsed.leftCollapsed === "boolean") setLeftCollapsed(parsed.leftCollapsed);
+        if (typeof parsed.rightCollapsed === "boolean") setRightCollapsed(parsed.rightCollapsed);
+      } catch (e) {
+        console.warn("Failed to load sessions from localStorage", e);
+      }
+    };
+
+    loadFromBackend();
+  }, [activeProfileId, profileLoading]);
+
+  // Save to backend whenever sessions change (debounced)
+  useEffect(() => {
+    if (profileLoading || !activeProfileId || isLoadingFromBackend) {
+      return;
+    }
+
+    const saveToBackend = async () => {
+      try {
+        const payload = { sessions, currentSessionId, leftCollapsed, rightCollapsed };
+        console.log(`[SessionsContext] Saving sessions to backend for profile: ${activeProfileId}`);
+        
+        const response = await apiFetch(`/api/profiles/${activeProfileId}/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          console.error('[SessionsContext] Failed to save sessions to backend');
+        }
+      } catch (err) {
+        console.error('[SessionsContext] Error saving sessions to backend:', err);
+      }
+    };
+
+    // Also save to localStorage as backup
     try {
       const payload = JSON.stringify({ sessions, currentSessionId, leftCollapsed, rightCollapsed });
       localStorage.setItem(STORAGE_KEY, payload);
     } catch (e) {
       console.warn("Failed to persist sessions to localStorage", e);
     }
-  }, [sessions, currentSessionId, leftCollapsed, rightCollapsed]);
+
+    // Debounce backend saves to avoid too many requests
+    const timeoutId = setTimeout(saveToBackend, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [sessions, currentSessionId, leftCollapsed, rightCollapsed, activeProfileId, profileLoading, isLoadingFromBackend]);
 
   function createSession(
     initialUserQuestion: string, 
@@ -85,6 +165,7 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
     customTitle?: string,
     userMessageId?: string,
     assistantMessageId?: string,
+    reasoning?: string
   ): { sessionId: string; assistantMessageId: string } {
     const id = crypto.randomUUID();
     const createdAt = nowISO();
@@ -102,7 +183,8 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
       content: initialAnswer, 
       createdAt,
       sources: responseSources,  // Attach sources to assistant message
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      reasoning  // Include reasoning if present
     };
     console.log("[SessionsContext] Creating assistant message with sources:", responseSources);
     console.log("[SessionsContext] Assistant message ID:", assistantMsgId);
@@ -202,6 +284,8 @@ export const SessionsProvider: React.FC<React.PropsWithChildren<{}>> = ({ childr
         currentSessionId,
         leftCollapsed,
         rightCollapsed,
+        leftActiveTab,
+        setLeftActiveTab,
         createSession,
         appendMessage,
         updateSessionTitle,

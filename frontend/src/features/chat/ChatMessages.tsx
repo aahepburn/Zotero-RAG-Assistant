@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import type { ChatMessage } from "../../types/domain";
 import { Spinner } from "../../components/ui/Spinner";
 import { useResponseSelection } from "../../contexts/ResponseSelectionContext";
+import ReasoningSection from "../../components/ui/ReasoningSection";
 
 interface Props {
   messages: ChatMessage[];
@@ -212,6 +213,9 @@ const ChatMessages: React.FC<Props> = ({ messages, loading }) => {
                 {m.role === "user" ? "You" : "Assistant"}
               </div>
               <div className="message__body">{formatMessageWithCitations(m.content)}</div>
+              {m.role === "assistant" && m.reasoning && (
+                <ReasoningSection reasoning={m.reasoning} messageId={m.id} />
+              )}
               {m.role === "assistant" && (
                 <button
                   className="btn"

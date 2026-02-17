@@ -27,9 +27,21 @@ export interface ChatResponse {
   citations: Citation[];
   snippets: Snippet[];
   generated_title?: string;
+  reasoning?: string; // Optional AI reasoning steps (e.g., from <think> tags)
 }
 
 export interface ChatRequest {
   query: string;
   session_id?: string;
+  use_metadata_filters?: boolean;
+  manual_filters?: {
+    year_min?: number;
+    year_max?: number;
+    tags?: string[];
+    collections?: string[];
+    title?: string;
+    author?: string;
+    item_types?: string[];
+  };
+  use_rrf?: boolean;
 }

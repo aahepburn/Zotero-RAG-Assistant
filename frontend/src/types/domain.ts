@@ -7,6 +7,7 @@ export interface ChatMessage {
   role: Role;
   content: string;
   citations?: Citation[];
+  reasoning?: string; // Optional AI reasoning content
 }
 
 export interface ConversationState {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSessions } from "../../contexts/SessionsContext";
 import { useResponseSelection } from "../../contexts/ResponseSelectionContext";
-import { apiFetch } from "../../api/client";
 import type { Source } from "../../types/session";
 
 /**
@@ -140,7 +139,7 @@ const SourcesPanel: React.FC = () => {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, marginBottom: "4px" }}>{source.title}</div>
                   <div className="muted" style={{ fontSize: 12, marginBottom: "6px" }}>
-                    {source.author || "Unknown author"}
+                    {source.author || "Unknown author"}{source.year ? ` (${source.year})` : ""}
                     {source.pageNumber ? ` • Page ${source.pageNumber}` : ""}
                   </div>
                   <div style={{ 
@@ -201,6 +200,19 @@ const SourcesPanel: React.FC = () => {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </a>
+
+                <a 
+                  title="Semantic Scholar" 
+                  className="btn"
+                  href={`https://www.semanticscholar.org/search?q=${encodeURIComponent(source.title)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
                 </a>
                 

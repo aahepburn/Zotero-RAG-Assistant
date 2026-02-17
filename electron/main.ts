@@ -33,6 +33,68 @@ let updateDownloaded = false;
 let updateInfo: { version: string; releaseNotes?: string } | null = null;
 
 /**
+ * Handle command-line arguments for Linux compatibility
+ * This allows users to work around GPU/sandbox issues on problematic systems
+ */
+if (process.platform === 'linux') {
+  // Parse command-line arguments
+  const args = process.argv.slice(1);
+  
+  console.log('Checking command-line arguments for Linux compatibility flags...');
+  
+  // Check for sandbox-related flags
+  if (args.includes('--no-sandbox') || args.includes('--disable-sandbox')) {
+    console.log('  \u2713 Disabling sandbox (user requested)');
+    app.commandLine.appendSwitch('no-sandbox');
+  }
+  
+  // Check for GPU-related flags
+  if (args.includes('--disable-gpu')) {
+    console.log('  \u2713 Disabling GPU acceleration (user requested)');
+    app.commandLine.appendSwitch('disable-gpu');
+  }
+  
+  if (args.includes('--disable-gpu-sandbox')) {
+    console.log('  \u2713 Disabling GPU sandbox only (user requested)');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+  }
+  
+  // Check for software rendering
+  if (args.includes('--disable-software-rasterizer')) {
+    console.log('  \u2713 Disabling software rasterizer (user requested)');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
+  }
+  
+  // Ozone platform (Wayland/X11)
+  const ozoneIndex = args.findIndex(arg => arg.startsWith('--ozone-platform='));
+  if (ozoneIndex >= 0) {
+    const platform = args[ozoneIndex].split('=')[1];
+    console.log(`  \u2713 Setting Ozone platform: ${platform}`);
+    app.commandLine.appendSwitch('ozone-platform', platform);
+  }
+  
+  // GL implementation
+  const glIndex = args.findIndex(arg => arg.startsWith('--use-gl='));
+  if (glIndex >= 0) {
+    const gl = args[glIndex].split('=')[1];
+    console.log(`  \u2713 Setting GL implementation: ${gl}`);
+    app.commandLine.appendSwitch('use-gl', gl);
+  }
+  
+  // If no special flags provided, apply sensible Linux defaults
+  if (!args.some(arg => arg.includes('sandbox') || arg.includes('gpu') || arg.includes('ozone') || arg.includes('gl'))) {
+    console.log('  \u2713 Applying default Linux compatibility settings:');
+    // Disable GPU sandbox by default on Linux (common source of crashes)
+    console.log('    - Disabling GPU sandbox (prevents crashes on some systems)');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+    
+    // Use desktop GL by default (more stable than ANGLE on Linux)
+    console.log('    - Using desktop OpenGL (more stable on Linux)');
+    app.commandLine.appendSwitch('use-gl', 'desktop');
+  }
+}
+
+/**
  * Generate a random authentication token for backend communication
  */
 function generateAuthToken(): string {
@@ -1299,24 +1361,40 @@ function stopBackendSync(): void {
  * Create the main application window
  */
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
+  // Platform-specific window configuration
+  const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 600,
     title: 'Zotero RAG Assistant',
-    titleBarStyle: 'hiddenInset', // Hide title text, keep traffic lights (macOS)
-    trafficLightPosition: { x: 16, y: 16 }, // Position window controls nicely
-    backgroundColor: '#1a1a1a', // Darker background for title bar area
+    backgroundColor: '#1a1a1a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
-    },
-    // Optional: custom icon
-    // icon: path.join(__dirname, '../assets/icon.png')
-  });
+    }
+  };
+  
+  // macOS-specific settings
+  if (process.platform === 'darwin') {
+    windowOptions.titleBarStyle = 'hiddenInset'; // macOS-only feature
+    windowOptions.trafficLightPosition = { x: 16, y: 16 };
+  }
+  // Linux-specific settings
+  else if (process.platform === 'linux') {
+    // Use default title bar on Linux for better compatibility
+    // Some Linux desktop environments don't handle custom title bars well
+    windowOptions.frame = true;
+  }
+  // Windows-specific settings
+  else if (process.platform === 'win32') {
+    // Windows uses default frame
+    windowOptions.frame = true;
+  }
+  
+  mainWindow = new BrowserWindow(windowOptions);
   
   // Load the frontend
   if (IS_DEV) {
@@ -1385,6 +1463,85 @@ function createWindow(): void {
   
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+  
+  // Handle renderer process crashes (critical for Linux stability)
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('================================================================================');
+    console.error('✗ FATAL: Renderer process crashed');
+    console.error(`  Reason: ${details.reason}`);
+    console.error(`  Exit code: ${details.exitCode}`);
+    console.error('================================================================================');
+    
+    const crashReasons: { [key: string]: string } = {
+      'clean-exit': 'Renderer exited normally',
+      'abnormal-exit': 'Renderer crashed unexpectedly',
+      'killed': 'Renderer was killed (possibly by OS)',
+      'crashed': 'Renderer crashed (GPU/sandbox issue)',
+      'oom': 'Renderer ran out of memory',
+      'launch-failed': 'Renderer failed to launch',
+      'integrity-failure': 'Renderer integrity check failed'
+    };
+    
+    const reasonText = crashReasons[details.reason] || details.reason;
+    
+    // Show error dialog before quitting
+    dialog.showErrorBox(
+      'Application Crashed',
+      `The application window crashed unexpectedly.\n\n` +
+      `Reason: ${reasonText}\n` +
+      `Exit code: ${details.exitCode}\n\n` +
+      `If this persists on Linux, try launching with:\n` +
+      `  /opt/ZoteroRAG/zotero-rag-assistant --disable-gpu-sandbox\n\n` +
+      `Or report this issue on GitHub.`
+    );
+    
+    // Clean shutdown
+    app.quit();
+  });
+  
+  // Handle page load failures
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('================================================================================');
+    console.error('✗ Page failed to load');
+    console.error(`  Error code: ${errorCode}`);
+    console.error(`  Description: ${errorDescription}`);
+    console.error(`  URL: ${validatedURL}`);
+    console.error('================================================================================');
+    
+    // Don't quit on load failures in production (might be transient)
+    if (!IS_DEV && errorCode !== -3) { // -3 is ERR_ABORTED (user navigation)
+      console.warn('Attempting to reload after load failure...');
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.reload();
+        }
+      }, 2000);
+    }
+  });
+  
+  // Handle renderer becoming unresponsive
+  mainWindow.on('unresponsive', () => {
+    console.warn('WARNING: Renderer process is unresponsive');
+    
+    if (!mainWindow) return; // Safety check
+    
+    dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: 'Application Not Responding',
+      message: 'The application is not responding. Would you like to wait or close it?',
+      buttons: ['Wait', 'Close'],
+      defaultId: 0
+    }).then(result => {
+      if (result.response === 1) {
+        app.quit();
+      }
+    });
+  });
+  
+  // Handle renderer becoming responsive again
+  mainWindow.on('responsive', () => {
+    console.log('✓ Renderer process is responsive again');
   });
   
   // Handle navigation to external links

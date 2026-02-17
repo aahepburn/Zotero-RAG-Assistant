@@ -12,7 +12,7 @@ const SnippetsPanel: React.FC = () => {
   const { currentSessionId, getSession, leftCollapsed, toggleLeft } = useSessions();
   const { selectedResponseId } = useResponseSelection();
   const session = currentSessionId ? getSession(currentSessionId) : null;
-  const [groupedSnippets, setGroupedSnippets] = useState<Map<string, { source: Source, snippets: Snippet[] }>>(new Map());
+  const [groupedSnippets, setGroupedSnippets] = useState<Map<string, { source: Source, snippets: Snippet[], citationIndex: number }>>(new Map());
 
   // Update snippets when selected response changes
   useEffect(() => {
@@ -24,14 +24,14 @@ const SnippetsPanel: React.FC = () => {
     // Find the selected message
     const selectedMessage = session.messages.find(m => m.id === selectedResponseId);
     if (selectedMessage && selectedMessage.role === "assistant" && selectedMessage.sources) {
-      // Group snippets by source
-      const grouped = new Map<string, { source: Source, snippets: Snippet[] }>();
+      // Group snippets by source, preserving citation index
+      const grouped = new Map<string, { source: Source, snippets: Snippet[], citationIndex: number }>();
       
-      selectedMessage.sources.forEach(source => {
+      selectedMessage.sources.forEach((source, index) => {
         if (source.snippets && source.snippets.length > 0) {
           // Sort snippets by confidence (highest first)
           const sortedSnippets = [...source.snippets].sort((a, b) => b.confidence - a.confidence);
-          grouped.set(source.documentId, { source, snippets: sortedSnippets });
+          grouped.set(source.documentId, { source, snippets: sortedSnippets, citationIndex: index + 1 });
         }
       });
       
@@ -213,7 +213,7 @@ const SnippetsPanel: React.FC = () => {
             >
               Showing snippets from {groupedSnippets.size} source{groupedSnippets.size !== 1 ? "s" : ""}:
             </div>
-            {Array.from(groupedSnippets.values()).map(({ source, snippets }, sourceIndex) => (
+            {Array.from(groupedSnippets.values()).map(({ source, snippets, citationIndex }) => (
               <div
                 key={source.documentId}
                 style={{
@@ -229,23 +229,43 @@ const SnippetsPanel: React.FC = () => {
                     padding: "12px",
                     background: "var(--bg-panel-alt, #fafafa)",
                     borderBottom: "1px solid var(--border-subtle)",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "12px",
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>
-                    {source.title}
+                  <div style={{ 
+                    minWidth: "28px", 
+                    height: "28px", 
+                    borderRadius: "50%", 
+                    background: "var(--accent)", 
+                    color: "white", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    fontSize: "13px", 
+                    fontWeight: 600,
+                    flexShrink: 0
+                  }}>
+                    {citationIndex}
                   </div>
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span>{source.author}</span>
-                    <div style={{ 
-                      display: "inline-block", 
-                      background: source.confidence >= 0.9 ? "#e8f5e9" : source.confidence >= 0.8 ? "#fff3e0" : "#fce4ec",
-                      color: source.confidence >= 0.9 ? "#2e7d32" : source.confidence >= 0.8 ? "#e65100" : "#c2185b",
-                      padding: "2px 6px", 
-                      borderRadius: "10px", 
-                      fontSize: "10px",
-                      fontWeight: 600
-                    }}>
-                      {(source.confidence * 100).toFixed(0)}%
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                      {source.title}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>{source.author}{source.year ? ` (${source.year})` : ""}</span>
+                      <div style={{ 
+                        display: "inline-block", 
+                        background: source.confidence >= 0.9 ? "#e8f5e9" : source.confidence >= 0.8 ? "#fff3e0" : "#fce4ec",
+                        color: source.confidence >= 0.9 ? "#2e7d32" : source.confidence >= 0.8 ? "#e65100" : "#c2185b",
+                        padding: "2px 6px", 
+                        borderRadius: "10px", 
+                        fontSize: "10px",
+                        fontWeight: 600
+                      }}>
+                        {(source.confidence * 100).toFixed(0)}%
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -259,20 +279,10 @@ const SnippetsPanel: React.FC = () => {
                         borderBottom: snippetIndex < snippets.length - 1 ? "1px solid var(--border-subtle)" : "none",
                       }}
                     >
-                      <div style={{ marginBottom: "8px" }}>
+                      <div style={{ marginBottom: "10px" }}>
                         <div
                           style={{
-                            fontWeight: 700,
                             fontSize: "13px",
-                            marginBottom: "6px",
-                            color: "var(--text-main)",
-                          }}
-                        >
-                          "{snippet.text.slice(0, 150)}{snippet.text.length > 150 ? "..." : ""}"
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "12px",
                             color: "var(--text-muted)",
                             lineHeight: "1.6",
                           }}
@@ -290,8 +300,9 @@ const SnippetsPanel: React.FC = () => {
                       </div>
                       <div
                         style={{
-                          fontSize: "11px",
-                          color: "var(--text-muted)",
+                          fontSize: "13px",
+                          color: "var(--text-main)",
+                          fontWeight: 600,
                           display: "flex",
                           gap: "12px",
                           alignItems: "center",

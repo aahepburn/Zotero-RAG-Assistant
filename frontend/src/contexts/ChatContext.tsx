@@ -4,6 +4,8 @@ import type { ChatMessage } from "../types/domain";
 import { useChat as useChatHook } from "../hooks/useChat";
 import { useSessions } from "./SessionsContext";
 import { useResponseSelection } from "./ResponseSelectionContext";
+import { useSearchSettings } from "./SearchSettingsContext";
+import { useNotifications } from "../hooks/useNotifications";
 import type { Snippet as SessionSnippet, Source, Message as SessionMessage } from "../types/session";
 
 type ChatContextShape = {
@@ -12,6 +14,7 @@ type ChatContextShape = {
   error: string | null;
   lastResponse: ChatResponse | null;
   sendMessage: (content: string) => Promise<void>;
+  stopGeneration: () => void;
   loadThread: (thread: { id: string; title?: string; messages: ChatMessage[]; lastResponse?: ChatResponse }) => void;
   clearMessages: () => void;
 };
@@ -49,12 +52,14 @@ function convertToResponseScopedSources(citations: any[], snippets: any[]): Sour
       documentId: citationId,
       title: citation.title ?? citation.itemTitle ?? "(no title)",
       author: citation.authors ?? citation.creators ?? "Unknown",
+      year: citation.year ?? citation.date ?? undefined,
       confidence: confidence,
       pageNumber: citation.page ?? undefined,
       section: citation.section ?? undefined,
       retrievalTimestamp: retrievalTimestamp,
       zoteroKey: citation.zotero_key ?? citation.key ?? citation.itemKey ?? undefined,
       localPdfPath: citation.pdf_path ?? citation.filePath ?? undefined,
+      authors: citation.authors ?? citation.creators ?? undefined,
       snippets: citationSnippets.map((s, sIndex) => ({
         id: String(s.id ?? s.snippet_id ?? crypto.randomUUID()),
         text: s.snippet ?? s.text ?? s.content ?? "",
@@ -73,9 +78,11 @@ function convertToResponseScopedSources(citations: any[], snippets: any[]): Sour
 }
 
 export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
-  const { messages, loading, error, lastResponse, sendMessage: rawSendMessage, loadThread, clearMessages } = useChatHook();
+  const { messages, loading, error, lastResponse, sendMessage: rawSendMessage, stopGeneration, loadThread, clearMessages } = useChatHook();
   const sessions = useSessions();
   const { setSelectedResponseId } = useResponseSelection();
+  const { searchSettings } = useSearchSettings();
+  const { notifyResponse } = useNotifications();
 
   // Load messages when currentSessionId changes
   useEffect(() => {
@@ -98,6 +105,7 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
       id: m.id,
       role: m.role,
       content: m.content,
+      reasoning: m.reasoning, // Preserve reasoning if present
       // Map sources from assistant messages if available
       citations: m.role === 'assistant' && m.sources ? m.sources.map(src => ({
         id: src.documentId,
@@ -122,8 +130,25 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
     // Get current session ID to enable stateful conversation
     let sessionId = sessions.currentSessionId;
     
+    // Build search options from search settings
+    const searchOptions = {
+      use_metadata_filters: searchSettings.searchEngineMode === 'metadata-aware' && searchSettings.filterMode === 'auto',
+      manual_filters: searchSettings.searchEngineMode === 'metadata-aware' && searchSettings.filterMode === 'manual'
+        ? {
+            year_min: searchSettings.manualFilters.yearMin,
+            year_max: searchSettings.manualFilters.yearMax,
+            tags: searchSettings.manualFilters.tags,
+            collections: searchSettings.manualFilters.collections,
+            title: searchSettings.manualFilters.title,
+            author: searchSettings.manualFilters.author,
+            item_types: searchSettings.manualFilters.itemTypes,
+          }
+        : undefined,
+      use_rrf: searchSettings.useRRF,
+    };
+    
     // send via the chat hook, which returns created messages and the response
-    const result = await rawSendMessage(content, sessionId || undefined);
+    const result = await rawSendMessage(content, sessionId || undefined, searchOptions);
     if (!result) return;
 
     const { userMessage, assistantMessage, response } = result;
@@ -177,7 +202,8 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
         initialSnippets,
         generatedTitle,  // Custom title from LLM
         userMessage.id,  // Use existing user message ID from useChat
-        assistantMessage.id  // Use existing assistant message ID from useChat
+        assistantMessage.id,  // Use existing assistant message ID from useChat
+        response.reasoning  // Pass reasoning if present
       );
       
       sessionId = newSessionId;
@@ -200,7 +226,8 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
         content: response.summary || assistantMessage.content,  // Use response.summary (actual LLM response)
         createdAt: new Date().toISOString(),
         sources: responseSources,  // Attach sources to assistant message
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        reasoning: response.reasoning  // Include reasoning if present
       };
       sessions.appendMessage(sessionId, u);
       sessions.appendMessage(sessionId, a);
@@ -221,14 +248,14 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
           documentId: String(c.id ?? c.key ?? c.zoteroKey ?? c.itemKey ?? c.UUID ?? ""),
           title: c.title ?? c.itemTitle ?? c.name ?? "(no title)",
           author: c.authors ?? c.creators ?? "Unknown",
+          year: c.year ?? c.date ?? undefined,
           confidence: 0.9,
           retrievalTimestamp: Date.now(),
           authors: c.authors ?? c.creators ?? undefined,
-          year: c.year ? String(c.year) : c.date ? String(c.date) : undefined,
           zoteroKey: c.zotero_key ?? c.key ?? c.itemKey ?? undefined,
           localPdfPath: c.pdf_path ?? c.filePath ?? c.local_path ?? undefined,
           snippets: []
-        } as Source;
+        };
         sessions.upsertSource(sessionId!, src);
       });
 
@@ -246,10 +273,13 @@ export const ChatProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
         sessions.addSnippet(sessionId!, sn);
       });
     }
+
+    // Notify user that response is ready
+    notifyResponse(response.summary || assistantMessage.content);
   }
 
   return (
-    <ChatContext.Provider value={{ messages, loading, error, lastResponse, sendMessage, loadThread, clearMessages }}>
+    <ChatContext.Provider value={{ messages, loading, error, lastResponse, sendMessage, stopGeneration, loadThread, clearMessages }}>
       {children}
     </ChatContext.Provider>
   );

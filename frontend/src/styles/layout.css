@@ -316,6 +316,18 @@
   background: linear-gradient(135deg, #dfbd95 0%, #c89461 100%);
 }
 
+/* Danger button (Stop generation, etc.) */
+
+.btn--danger {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: #ffffff;
+  border-color: rgba(192, 57, 43, 0.45);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ec7063 0%, #cb4335 100%);
+}
+
 /* Sources strip */
 
 .sources-strip {

@@ -1,0 +1,61 @@
+/* Sidebar Tabs Component */
+.sidebar-tabs {
+  display: flex;
+  height: 100%;
+  background: var(--bg-panel);
+}
+
+.sidebar-tabs__nav {
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel-alt, #fafafa);
+}
+
+.sidebar-tabs__nav-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.sidebar-tabs__nav-item:hover {
+  background: var(--bg-hover, #f0f0f0);
+  color: var(--text-main);
+}
+
+.sidebar-tabs__nav-item.active {
+  background: var(--bg-main, #ffffff);
+  color: var(--accent, #8b4513);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-tabs__nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: var(--accent, #8b4513);
+  border-radius: 0 2px 2px 0;
+}
+
+.sidebar-tabs__content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

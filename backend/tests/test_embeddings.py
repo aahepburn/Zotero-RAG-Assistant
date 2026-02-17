@@ -12,7 +12,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from backend.embed_utils import get_embedding, MODEL_NAME, EMBEDDING_DIMENSION
+from backend.embed_utils import get_embedding, get_current_model_id, get_embedding_dimension
 from backend.vector_db import ChromaClient
 import tempfile
 import shutil
@@ -20,8 +20,10 @@ import shutil
 
 def test_embedding_dimension():
     """Test that embeddings have the correct dimension."""
-    print(f"Testing embedding model: {MODEL_NAME}")
-    print(f"Expected dimension: {EMBEDDING_DIMENSION}")
+    model_id = get_current_model_id()
+    expected_dim = get_embedding_dimension()
+    print(f"Testing embedding model: {model_id}")
+    print(f"Expected dimension: {expected_dim}")
     
     # Test with sample text
     test_text = "This is a test document about machine learning and artificial intelligence."
@@ -29,8 +31,8 @@ def test_embedding_dimension():
     
     print(f"Actual dimension: {len(embedding)}")
     
-    assert len(embedding) == EMBEDDING_DIMENSION, \
-        f"Dimension mismatch! Expected {EMBEDDING_DIMENSION}, got {len(embedding)}"
+    assert len(embedding) == expected_dim, \
+        f"Dimension mismatch! Expected {expected_dim}, got {len(embedding)}"
     
     print("✓ Embedding dimension is correct")
 
@@ -131,8 +133,8 @@ def main():
         print("✓ ALL TESTS PASSED")
         print("=" * 70)
         print("\nYour embedding configuration is correct!")
-        print(f"Model: {MODEL_NAME}")
-        print(f"Dimension: {EMBEDDING_DIMENSION}")
+        print(f"Model: {get_current_model_id()}")
+        print(f"Dimension: {get_embedding_dimension()}")
         print("\nYou can now safely re-index your library.")
         
     except AssertionError as e:

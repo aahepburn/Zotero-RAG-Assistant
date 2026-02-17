@@ -35,10 +35,18 @@ class ProfileManager:
         self.BASE_DIR.mkdir(parents=True, exist_ok=True)
         self.PROFILES_DIR.mkdir(parents=True, exist_ok=True)
         
+        print(f"[ProfileManager] Initialized with BASE_DIR: {self.BASE_DIR}")
+        print(f"[ProfileManager] PROFILES_DIR: {self.PROFILES_DIR}")
+        print(f"[ProfileManager] ACTIVE_PROFILE_FILE: {self.ACTIVE_PROFILE_FILE}")
+        
         # Ensure default profile exists
         if not self.list_profiles():
+            print("[ProfileManager] No profiles found, creating default profile")
             self.create_profile("default", "Default Profile")
             self.set_active_profile("default")
+        else:
+            existing_profiles = self.list_profiles()
+            print(f"[ProfileManager] Found {len(existing_profiles)} existing profiles: {[p['id'] for p in existing_profiles]}")
     
     def get_profile_dir(self, profile_id: str) -> Path:
         """Get the directory path for a profile."""
@@ -244,11 +252,14 @@ class ProfileManager:
             Profile metadata dictionary or None if no active profile
         """
         if not self.ACTIVE_PROFILE_FILE.exists():
+            print(f"[ProfileManager] Active profile file not found at: {self.ACTIVE_PROFILE_FILE}")
             # Auto-select first available profile
             profiles = self.list_profiles()
             if profiles:
+                print(f"[ProfileManager] Auto-selecting first profile: {profiles[0]['id']}")
                 self.set_active_profile(profiles[0]['id'])
                 return profiles[0]
+            print("[ProfileManager] No profiles available to auto-select")
             return None
         
         try:
@@ -256,9 +267,14 @@ class ProfileManager:
                 data = json.load(f)
                 profile_id = data.get('activeProfileId')
                 if profile_id:
-                    return self.get_profile(profile_id)
+                    profile = self.get_profile(profile_id)
+                    if profile:
+                        print(f"[ProfileManager] Active profile: {profile_id}")
+                        return profile
+                    else:
+                        print(f"[ProfileManager] WARNING: Active profile '{profile_id}' not found")
         except Exception as e:
-            print(f"Error reading active profile: {e}")
+            print(f"[ProfileManager] Error reading active profile: {e}")
         
         return None
     
@@ -300,14 +316,23 @@ class ProfileManager:
         """
         settings_file = self.get_profile_settings_file(profile_id)
         
+        print(f"[ProfileManager] Loading settings from: {settings_file}")
+        
         if not settings_file.exists():
+            print(f"[ProfileManager] Settings file not found, returning empty dict")
             return {}
         
         try:
             with open(settings_file, 'r') as f:
-                return json.load(f)
+                settings = json.load(f)
+                print(f"[ProfileManager] Loaded settings with keys: {list(settings.keys())}")
+                if 'zoteroPath' in settings:
+                    print(f"[ProfileManager] Zotero path: {settings['zoteroPath']}")
+                if 'chromaPath' in settings:
+                    print(f"[ProfileManager] Chroma path: {settings['chromaPath']}")
+                return settings
         except Exception as e:
-            print(f"Error loading profile settings: {e}")
+            print(f"[ProfileManager] Error loading profile settings: {e}")
             return {}
     
     def save_profile_settings(self, profile_id: str, settings: Dict[str, Any]) -> bool:

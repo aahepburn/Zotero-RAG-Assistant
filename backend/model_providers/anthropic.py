@@ -2,7 +2,8 @@
 Anthropic provider for Claude models.
 
 Implements the ModelProvider interface for Anthropic's API, supporting
-Claude 3 family of models.
+Claude 4.x family of models (as of Feb 2026). Includes backward compatibility
+mapping for deprecated Claude 3.x model identifiers.
 """
 
 from typing import Dict, Any, List
@@ -21,7 +22,7 @@ class AnthropicProvider(BaseProvider):
         super().__init__(
             id="anthropic",
             label="Anthropic",
-            default_model="claude-3-5-sonnet-20241022",
+            default_model="claude-opus-4-6",
             supports_streaming=True,
             requires_api_key=True,
         )
@@ -42,15 +43,17 @@ class AnthropicProvider(BaseProvider):
         return Anthropic(api_key=api_key)
     
     def validate_credentials(self, credentials: Dict[str, Any]) -> bool:
-        """Validate Anthropic API key by making a test request."""
+        """Validate Anthropic API key by making a minimal test request.
+        
+        Uses Claude Haiku 4.5 (fastest current model) for validation.
+        """
         try:
             client = self._get_client(credentials)
-            # Make a minimal request to test the API key
-            # Anthropic doesn't have a models list endpoint, so we make a tiny chat request
+            # Use Claude 4.5 Haiku (fastest current model) for validation
             client.messages.create(
-                model=self.default_model,
+                model="claude-haiku-4-5-20251001",
                 max_tokens=1,
-                messages=[{"role": "user", "content": "Hi"}]
+                messages=[{"role": "user", "content": "test"}]
             )
             return True
         except ImportError as e:
@@ -64,44 +67,186 @@ class AnthropicProvider(BaseProvider):
             else:
                 raise ProviderError(f"Anthropic validation failed: {str(e)}")
     
-    def list_models(self, credentials: Dict[str, Any]) -> List[ModelInfo]:
-        """
-        List available Anthropic models.
+    def validate_credentials_and_list_models(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate credentials AND return available models in one call.
         
-        Anthropic doesn't provide a models API, so we return a curated list.
+        More efficient than separate validate + list_models calls.
+        
+        Returns:
+            {
+                "valid": bool,
+                "models": List[ModelInfo],
+                "message": str
+            }
         """
-        return [
+        known_models = [
             ModelInfo(
-                id="claude-3-5-sonnet-20241022",
-                name="Claude 3.5 Sonnet",
-                description="Most intelligent model, best for complex reasoning",
+                id="claude-opus-4-6",
+                name="Claude Opus 4.6",
+                description="Most intelligent; best for agents, coding, complex reasoning (200K context)",
                 context_length=200000
             ),
             ModelInfo(
-                id="claude-3-5-haiku-20241022",
-                name="Claude 3.5 Haiku",
-                description="Fastest model, good for simple tasks",
+                id="claude-sonnet-4-5-20250929",
+                name="Claude Sonnet 4.5",
+                description="Speed + intelligence balance (200K context)",
                 context_length=200000
             ),
             ModelInfo(
-                id="claude-3-opus-20240229",
-                name="Claude 3 Opus",
-                description="Previous flagship model, highly capable",
-                context_length=200000
-            ),
-            ModelInfo(
-                id="claude-3-sonnet-20240229",
-                name="Claude 3 Sonnet",
-                description="Balanced performance and speed",
-                context_length=200000
-            ),
-            ModelInfo(
-                id="claude-3-haiku-20240307",
-                name="Claude 3 Haiku",
-                description="Fast and efficient",
+                id="claude-haiku-4-5-20251001",
+                name="Claude Haiku 4.5",
+                description="Fastest, near-frontier intelligence; ideal for high-volume RAG (200K context)",
                 context_length=200000
             ),
         ]
+        
+        try:
+            client = self._get_client(credentials)
+            available_models = []
+            validation_succeeded = False
+            
+            print(f"[Anthropic Provider] Testing model availability...")
+            
+            # Test each model - this simultaneously validates credentials and discovers models
+            for model_info in known_models:
+                try:
+                    client.messages.create(
+                        model=model_info.id,
+                        max_tokens=1,
+                        messages=[{"role": "user", "content": "test"}]
+                    )
+                    # Success means both valid credentials AND accessible model
+                    validation_succeeded = True
+                    available_models.append(model_info)
+                    print(f"[Anthropic Provider] ✓ {model_info.id} accessible")
+                except Exception as e:
+                    error_str = str(e).lower()
+                    # Check for authentication errors
+                    if "authentication" in error_str or "api key" in error_str or "401" in error_str:
+                        raise ProviderAuthenticationError(f"Invalid Anthropic API key: {str(e)}")
+                    # If not a 404, assume model exists but rate limit/other issue
+                    elif "not_found" not in error_str and "404" not in error_str:
+                        validation_succeeded = True
+                        available_models.append(model_info)
+                        print(f"[Anthropic Provider] ~ {model_info.id} included (non-404 error)")
+                    else:
+                        print(f"[Anthropic Provider] ✗ {model_info.id} not available (404)")
+            
+            if validation_succeeded:
+                return {
+                    "valid": True,
+                    "models": available_models if available_models else known_models,
+                    "message": f"Found {len(available_models)} available models"
+                }
+            else:
+                # All models returned 404 - might be a new API or all models deprecated
+                return {
+                    "valid": True,
+                    "models": known_models,
+                    "message": "Credentials valid but couldn't verify model availability"
+                }
+                
+        except ProviderAuthenticationError:
+            raise
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "connection" in error_msg or "network" in error_msg:
+                raise ProviderConnectionError(f"Cannot connect to Anthropic: {str(e)}")
+            else:
+                raise ProviderError(f"Anthropic validation failed: {str(e)}")
+    
+    def list_models(self, credentials: Dict[str, Any]) -> List[ModelInfo]:
+        """
+        List available Anthropic models by testing which ones are accessible.
+        
+        Anthropic doesn't provide a models.list() API, so we test known models
+        to see which ones are accessible with the given API key.
+        
+        Note: This makes minimal API calls (1 token per model) to test availability.
+        Results are based on testing 3 known Claude 4.x models.
+        """
+        # Known current models (as of Feb 2026)
+        known_models = [
+            ModelInfo(
+                id="claude-opus-4-6",
+                name="Claude Opus 4.6",
+                description="Most intelligent; best for agents, coding, complex reasoning (200K context)",
+                context_length=200000
+            ),
+            ModelInfo(
+                id="claude-sonnet-4-5-20250929",
+                name="Claude Sonnet 4.5",
+                description="Speed + intelligence balance (200K context)",
+                context_length=200000
+            ),
+            ModelInfo(
+                id="claude-haiku-4-5-20251001",
+                name="Claude Haiku 4.5",
+                description="Fastest, near-frontier intelligence; ideal for high-volume RAG (200K context)",
+                context_length=200000
+            ),
+        ]
+        
+        # Quick check: if no credentials, return known models
+        if not credentials or not credentials.get("api_key"):
+            return known_models
+        
+        try:
+            client = self._get_client(credentials)
+            available_models = []
+            
+            # Test each model with a minimal request (1 token output)
+            for model_info in known_models:
+                try:
+                    client.messages.create(
+                        model=model_info.id,
+                        max_tokens=1,
+                        messages=[{"role": "user", "content": "test"}]
+                    )
+                    # If no exception, model is accessible
+                    available_models.append(model_info)
+                except Exception as e:
+                    # Check if it's a 404 (model not found) vs other errors
+                    error_str = str(e).lower()
+                    if "not_found" not in error_str and "404" not in error_str:
+                        # Not a 404, might be rate limit or other issue
+                        # Include the model anyway to be safe
+                        available_models.append(model_info)
+                    # If it's a 404, skip this model (not available on this tier)
+            
+            # If we found at least one accessible model, return the list
+            if available_models:
+                return available_models
+            
+            # If no models were accessible, return the full list as fallback
+            return known_models
+            
+        except Exception:
+            # If discovery fails entirely, return the full curated list
+            return known_models
+    
+    def _resolve_model_name(self, model: str) -> str:
+        """
+        Resolve legacy or alias model names to current Claude 4.x identifiers.
+        
+        Maps deprecated Claude 3.x models to their Claude 4.x equivalents.
+        """
+        # Map legacy 3.x models to 4.x equivalents
+        model_mapping = {
+            # Legacy 3.5 models -> 4.x equivalents
+            "claude-3-5-sonnet-latest": "claude-opus-4-6",
+            "claude-3-5-sonnet-20241022": "claude-opus-4-6",
+            "claude-3-5-sonnet-20240620": "claude-opus-4-6",
+            "claude-3-5-haiku-latest": "claude-haiku-4-5-20251001",
+            "claude-3-5-haiku-20241022": "claude-haiku-4-5-20251001",
+            # Legacy 3.x models -> 4.x equivalents
+            "claude-3-opus-latest": "claude-opus-4-6",
+            "claude-3-opus-20240229": "claude-opus-4-6",
+            "claude-3-sonnet-20240229": "claude-sonnet-4-5-20250929",
+            "claude-3-haiku-latest": "claude-haiku-4-5-20251001",
+            "claude-3-haiku-20240307": "claude-haiku-4-5-20251001",
+        }
+        return model_mapping.get(model, model)
     
     def chat(
         self,
@@ -116,6 +261,9 @@ class AnthropicProvider(BaseProvider):
         try:
             client = self._get_client(credentials)
             
+            # Resolve '-latest' aliases to actual model versions
+            resolved_model = self._resolve_model_name(model)
+            
             # Use MessageAdapter for Anthropic-specific format
             system_message, conversation_messages = MessageAdapter.to_anthropic(messages)
             
@@ -126,15 +274,13 @@ class AnthropicProvider(BaseProvider):
             # Map standard parameters to Anthropic equivalents
             mapped_params = ParameterMapper.map_params(kwargs, self.id)
             
-
-            # top_p: 0.9 for nucleus sampling
-            # top_k: 50 for vocabulary diversity in technical language
+            # Claude 4.x requires: use temperature OR top_p, not both
+            # We use temperature (more standard for academic use) + top_k for diversity
             request_params = {
-                "model": model,
+                "model": resolved_model,
                 "messages": conversation_messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                "top_p": mapped_params.get("top_p", 0.9),
                 "top_k": mapped_params.get("top_k", 50),
             }
             

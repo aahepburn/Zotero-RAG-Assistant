@@ -12,6 +12,7 @@ export type Source = {
   documentId: string;
   title: string;
   author: string;
+  year?: string | number;
   confidence: number;
   pageNumber?: number;
   section?: string;
@@ -20,6 +21,7 @@ export type Source = {
   // Legacy fields for backward compatibility
   zoteroKey?: string;
   localPdfPath?: string;
+  authors?: string; // Backward compatibility with full authors list
 };
 
 // Legacy type alias for backward compatibility
@@ -32,6 +34,7 @@ export type Message = {
   createdAt: string;
   sources?: Source[];  // Response-scoped sources
   timestamp?: number;  // When response was generated
+  reasoning?: string;  // Optional AI reasoning steps
 };
 
 export type Session = {

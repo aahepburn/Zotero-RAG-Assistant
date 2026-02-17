@@ -1,58 +1,45 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background gradient -->
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#CC2936;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#990000;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6D28D9;stop-opacity:1" />
     </linearGradient>
   </defs>
-  
-  <!-- Rounded square background -->
-  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
-  
-  <!-- Book/Document representation (Zotero) -->
-  <g transform="translate(80, 120)">
-    <!-- Main book -->
-    <rect x="0" y="0" width="180" height="240" rx="8" fill="#ffffff" opacity="0.95"/>
-    <rect x="10" y="20" width="160" height="4" rx="2" fill="#2563eb" opacity="0.3"/>
-    <rect x="10" y="40" width="160" height="4" rx="2" fill="#2563eb" opacity="0.3"/>
-    <rect x="10" y="60" width="120" height="4" rx="2" fill="#2563eb" opacity="0.3"/>
-    <rect x="10" y="80" width="140" height="4" rx="2" fill="#2563eb" opacity="0.3"/>
-    <rect x="10" y="100" width="160" height="4" rx="2" fill="#2563eb" opacity="0.3"/>
-    <rect x="10" y="120" width="100" height="4" rx="2" fill="#2563eb" opacity="0.3"/>
-    
-    <!-- Book spine shadow -->
-    <rect x="0" y="0" width="20" height="240" rx="8" fill="#000000" opacity="0.1"/>
+  <rect width="512" height="512" rx="110" fill="#FFFFFF"/>
+  <g transform="translate(70, 110)">
+    <rect x="20" y="10" width="160" height="220" rx="8" fill="#E5E5E5"/>
+    <rect x="10" y="5" width="160" height="220" rx="8" fill="#F0F0F0"/>
+    <rect x="0" y="0" width="160" height="220" rx="8" fill="url(#redGrad)"/>
+    <rect x="15" y="20" width="130" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="40" width="130" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="60" width="100" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="80" width="120" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="100" width="130" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="120" width="90" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="140" width="110" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="160" width="130" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="15" y="180" width="100" height="4" rx="2" fill="#FFFFFF" opacity="0.9"/>
   </g>
-  
-  <!-- AI/RAG representation - Neural network nodes -->
-  <g transform="translate(280, 160)">
-    <!-- Connection lines -->
-    <line x1="40" y1="40" x2="100" y2="80" stroke="url(#accent)" stroke-width="4" opacity="0.6"/>
-    <line x1="40" y1="40" x2="100" y2="120" stroke="url(#accent)" stroke-width="4" opacity="0.6"/>
-    <line x1="40" y1="160" x2="100" y2="80" stroke="url(#accent)" stroke-width="4" opacity="0.6"/>
-    <line x1="40" y1="160" x2="100" y2="120" stroke="url(#accent)" stroke-width="4" opacity="0.6"/>
-    <line x1="100" y1="80" x2="160" y2="100" stroke="url(#accent)" stroke-width="4" opacity="0.6"/>
-    <line x1="100" y1="120" x2="160" y2="100" stroke="url(#accent)" stroke-width="4" opacity="0.6"/>
-    
-    <!-- Input nodes -->
-    <circle cx="40" cy="40" r="16" fill="#ffffff" stroke="url(#accent)" stroke-width="4"/>
-    <circle cx="40" cy="160" r="16" fill="#ffffff" stroke="url(#accent)" stroke-width="4"/>
-    
-    <!-- Hidden layer nodes -->
-    <circle cx="100" cy="80" r="16" fill="#ffffff" stroke="url(#accent)" stroke-width="4"/>
-    <circle cx="100" cy="120" r="16" fill="#ffffff" stroke="url(#accent)" stroke-width="4"/>
-    
-    <!-- Output node -->
-    <circle cx="160" cy="100" r="20" fill="url(#accent)" stroke="#ffffff" stroke-width="4"/>
-    
-    <!-- Small sparkles for AI effect -->
-    <path d="M 180 60 L 185 65 L 190 60 L 185 55 Z" fill="#ffffff" opacity="0.8"/>
-    <path d="M 170 140 L 174 144 L 178 140 L 174 136 Z" fill="#ffffff" opacity="0.6"/>
-    <path d="M 10 100 L 14 104 L 18 100 L 14 96 Z" fill="#ffffff" opacity="0.7"/>
+  <g transform="translate(260, 140)">
+    <line x1="45" y1="45" x2="110" y2="75" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <line x1="45" y1="45" x2="110" y2="125" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <line x1="45" y1="155" x2="110" y2="75" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <line x1="45" y1="155" x2="110" y2="125" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <line x1="110" y1="75" x2="110" y2="125" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <line x1="110" y1="75" x2="175" y2="100" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <line x1="110" y1="125" x2="175" y2="100" stroke="url(#purpleGrad)" stroke-width="5" opacity="0.7"/>
+    <circle cx="45" cy="45" r="18" fill="#FFFFFF" stroke="url(#purpleGrad)" stroke-width="5"/>
+    <circle cx="45" cy="155" r="18" fill="#FFFFFF" stroke="url(#purpleGrad)" stroke-width="5"/>
+    <circle cx="110" cy="75" r="18" fill="url(#purpleGrad)"/>
+    <circle cx="110" cy="125" r="18" fill="url(#purpleGrad)"/>
+    <circle cx="175" cy="100" r="20" fill="url(#redGrad)"/>
+    <g transform="translate(175, 100)">
+      <path d="M 0,-28 L 2,-10 L 10,-2 L 2,0 L 0,10 L -2,0 L -10,-2 L -2,-10 Z" fill="#8B5CF6" opacity="0.8"/>
+    </g>
   </g>
+  <ellipse cx="256" cy="480" rx="200" ry="20" fill="#000000" opacity="0.1"/>
 </svg>

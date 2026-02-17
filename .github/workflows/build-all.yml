@@ -218,9 +218,7 @@ jobs:
         with:
           name: linux-packages
           path: |
-            release/*.AppImage
             release/*.deb
-            release/*.tar.gz
             release/latest-linux.yml
           retention-days: 30
       

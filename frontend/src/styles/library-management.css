@@ -1,0 +1,402 @@
+/* Library Management Panel — mirrors Scope tab design language */
+
+/* ── Panel wrapper ─────────────────────────────────────────────────────────── */
+
+.lib-panel {
+  padding: 16px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+/* ── Sections (flat, bottom-border only — same as .scope-section) ─────────── */
+
+.lib-section {
+  margin-bottom: 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle, #e5e0d8);
+  border-radius: 0;
+  padding: 0 0 16px 0;
+}
+
+.lib-section-last {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+/* ── Section titles — identical to .scope-section-title ───────────────────── */
+
+/* .scope-section-title is already defined globally in prompt-scaffolding.css.
+   Redefined here for self-containment when loaded independently. */
+.scope-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 12px;
+  letter-spacing: 0.01em;
+}
+
+.scope-section-title svg {
+  color: var(--accent, #d6b26a);
+  flex-shrink: 0;
+}
+
+/* ── Stats Grid ───────────────────────────────────────────────────────────── */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.stat-card {
+  background: var(--bg-panel, #f9f4ec);
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+  border-radius: 6px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+  line-height: 1;
+}
+
+.stat-value-highlight {
+  color: var(--accent, #d6b26a);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.loading-stats {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Select dropdown ──────────────────────────────────────────────────────── */
+
+.lib-select {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+  border-radius: 6px;
+  background: var(--bg-panel, #f9f4ec);
+  color: var(--text-main);
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.lib-select:focus {
+  outline: none;
+  border-color: var(--accent, #d6b26a);
+  background: var(--bg-surface, #ffffff);
+  box-shadow: 0 0 0 2px rgba(214, 178, 106, 0.1);
+}
+
+.model-info {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  background: var(--bg-panel, #f9f4ec);
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+  border-radius: 6px;
+}
+
+.model-info strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* ── Action row ───────────────────────────────────────────────────────────── */
+
+.lib-action-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.lib-action-row .btn-primary,
+.lib-action-row .btn-secondary {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* ── Buttons (mirrors prompt-scaffolding.css) ─────────────────────────────── */
+
+.btn-primary,
+.btn-secondary {
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary {
+  background: var(--accent, #d6b26a);
+  color: white;
+  box-shadow: 0 1px 4px rgba(214, 178, 106, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(214, 178, 106, 0.4);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--bg-panel, #f9f4ec);
+  color: var(--text-main);
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-panel-alt, #fdf9f2);
+  border-color: var(--accent, #d6b26a);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lib-cancel-btn {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  background: transparent;
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lib-cancel-btn:hover {
+  border-color: #d32f2f;
+  color: #d32f2f;
+  background: rgba(211, 47, 47, 0.04);
+}
+
+/* ── Indexing Progress ────────────────────────────────────────────────────── */
+
+.indexing-progress {
+  background: var(--bg-panel, #f9f4ec);
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+  border-radius: 6px;
+  padding: 14px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.progress-eta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--border-subtle, #e5e0d8);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent, #d6b26a) 0%, #c8a050 100%);
+  transition: width 300ms ease;
+  border-radius: 3px;
+}
+
+.progress-fill-indeterminate {
+  height: 100%;
+  width: 100%;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(214, 178, 106, 0.4) 0,
+    rgba(214, 178, 106, 0.1) 10px
+  );
+  animation: progress-shimmer 1s linear infinite;
+  background-size: 40px 100%;
+}
+
+@keyframes progress-shimmer {
+  0%   { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+.progress-details {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Migration status rows ────────────────────────────────────────────────── */
+
+.lib-status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+}
+
+.lib-status-row.loading {
+  border-color: var(--border-subtle, #e5e0d8);
+  background: var(--bg-panel, #f9f4ec);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.lib-status-row.needs-update {
+  border-color: rgba(230, 160, 32, 0.5);
+  background: rgba(230, 160, 32, 0.06);
+}
+
+.lib-status-row.up-to-date {
+  border-color: rgba(76, 175, 80, 0.4);
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.lib-status-row.error {
+  border-color: rgba(244, 67, 54, 0.4);
+  background: rgba(244, 67, 54, 0.05);
+  color: #c62828;
+}
+
+.status-indicator {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.status-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.status-text strong {
+  font-weight: 600;
+}
+
+/* ── Info box (migration details) ─────────────────────────────────────────── */
+
+.lib-info-box {
+  background: var(--bg-panel, #f9f4ec);
+  border: 1.5px solid var(--border-subtle, #e5e0d8);
+  border-radius: 6px;
+  padding: 12px 14px;
+  color: var(--text-muted);
+}
+
+/* ── Migration result banners ─────────────────────────────────────────────── */
+
+.migration-result {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.migration-result.success {
+  background: rgba(76, 175, 80, 0.08);
+  color: #2e7d32;
+  border: 1.5px solid rgba(76, 175, 80, 0.4);
+}
+
+.migration-result.error {
+  background: rgba(244, 67, 54, 0.06);
+  color: #c62828;
+  border: 1.5px solid rgba(244, 67, 54, 0.35);
+}
+
+/* ── Spinner ──────────────────────────────────────────────────────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lib-action-row {
+    flex-direction: column;
+  }
+
+  .lib-action-row .btn-primary,
+  .lib-action-row .btn-secondary {
+    width: 100%;
+  }
+}

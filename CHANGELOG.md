@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-17
+
+### Added
+- **Metadata Filtering System**: Filter retrieved chunks by publication date, tags, and collections
+  - Date range filters (before/after specific years)
+  - Multi-select tag and collection filters with "match any" or "match all" logic
+  - Filters apply to retrieval pipeline before context is sent to LLM
+- **Retrieval Fusion (RRF)**: Reciprocal Rank Fusion combines filtered semantic results with pure semantic results
+  - Ensures relevant papers aren't completely excluded by overly strict filters
+  - Configurable balance between filtered and unfiltered results
+- **Multi-Tab Sidebar**: Reorganized interface into Chat, Library, and Prompts tabs
+  - Chat tab: Conversation history with "Start New Session" button
+  - Library tab: Indexing controls and metadata sync
+  - Prompts tab: Academic prompt scaffolding and Scope panel
+- **Scope Panel Integration**: Moved from modal to dedicated Prompts tab
+  - Persistent UI for search mode and context length selection
+  - Renamed "Original" mode to "Semantic only" with clearer descriptions
+- **LM Studio Provider**: Official support for LM Studio local model server
+  - Auto-discovery of available models via /v1/models endpoint
+  - Optimized system prompts for local models
+  - Configurable base URL (default: http://localhost:1234)
+- **Dynamic Model Discovery**: Ollama and LM Studio automatically fetch available models
+  - Real-time model list updates from provider APIs
+  - Reduces configuration overhead for local model users
+- **AI Reasoning Display**: View model's chain-of-thought reasoning for supported providers
+  - Toggle button to show/hide reasoning panels
+  - Formatted markdown rendering of reasoning steps
+  - Works with OpenRouter, OpenAI o1/o3 models
+- **Semantic Scholar Integration**: Automatic metadata enrichment during indexing
+  - Fetches missing abstracts, publication years, and citation counts
+  - Improves metadata quality for filtering and search
+- **Metadata Sync Feature**: Update metadata without re-embedding
+  - Syncs titles, authors, tags, collections, dates from Zotero database
+  - Preserves existing embeddings and chunk data
+  - Provides detailed sync statistics
+- **OCR Documentation Note**: Explains why scanned PDFs without OCR cannot be indexed
+
+### Changed
+- **Settings Panel Redesign**: Reorganized into tabbed interface
+  - General: API keys, base URLs, embedding model selection
+  - Advanced: Temperature, context length, performance tuning
+  - About: Version info, links, credits
+- **ChromaDB Metadata Schema**: Upgraded to version 2
+  - Tags and collections stored as pipe-separated strings
+  - Year field now integer (0 for unknown dates)
+  - Enables efficient metadata filtering queries
+- **Metadata Migration Architecture**: Complete overhaul with pre-caching
+  - Pre-loads all Zotero items at startup for O(1) lookups
+  - Bidirectional sync: vector DB → Zotero and Zotero → vector DB
+  - Graceful handling of missing items and orphaned embeddings
+- **Linux Packaging**: Simplified to .deb files only (removed AppImage, tar.gz)
+- **Application Icon**: Redesigned with Zotero brand colors
+  - White background, red document stack, purple AI network
+  - Matches Zotero's official color scheme
+
+### Fixed
+- **Metadata Sync Endpoint**: Fixed 500 error by adding logger initialization
+- **ChromaDB Indexing**: Fixed None value rejection errors
+  - Year defaults to 0, page numbers safely handled with get()
+  - Prevents "failed to extract enum MetadataValue" errors
+- **Profile System**: Verified isolation and persistence
+  - Default profile at ~/.zotero-llm/profiles/default/ working correctly
+  - Settings, sessions, vector DB properly isolated per profile
+- **Linux Backend Stability**: Multiple fixes for path handling and binary compatibility
+  - Improved error messages for missing Zotero database
+  - Better handling of non-existent file paths
+- **Sessions Context**: Fixed backend integration for chat history persistence
+  - Debounced saves prevent race conditions
+  - Sessions properly load on app startup
+
 ## [0.3.2] - 2026-01-30
 
 ### Changed
