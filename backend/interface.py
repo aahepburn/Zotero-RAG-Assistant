@@ -19,6 +19,7 @@ from backend.query_condenser import QueryCondenser
 import os
 import re
 from collections import OrderedDict
+from typing import Dict, Optional
 import threading
 import time
 import logging
@@ -84,7 +85,98 @@ class ZoteroChatbot:
         if credentials:
             for provider_id, creds in credentials.items():
                 self.provider_manager.set_credentials(provider_id, creds)
-    
+
+    def get_active_model_context_length(self) -> Optional[int]:
+        """
+        Get the context window size of the currently active model.
+
+        Returns:
+            Context length in tokens, or None if not available
+        """
+        try:
+            provider = self.provider_manager.get_active_provider()
+            model_id = self.provider_manager.get_active_model()
+            creds = self.provider_manager.get_credentials(self.provider_manager.active_provider_id)
+
+            # Get available models from provider
+            models = provider.list_models(creds)
+
+            # Find the active model
+            model_info = next(
+                (m for m in models if m.id == model_id),
+                None
+            )
+
+            return model_info.context_length if model_info else None
+        except Exception as e:
+            # Log but don't fail - fall back to conservative defaults
+            logger.debug(f"Could not determine model context length: {e}")
+            return None
+
+    def get_retrieval_limits(self, is_focused: bool = False) -> Dict[str, int]:
+        """
+        Calculate appropriate retrieval limits based on active model's context window.
+
+        Args:
+            is_focused: Whether this is a focused query (filters active or ≤2 papers)
+
+        Returns:
+            Dict with retrieval_k, rerank_top_k, max_snippets_per_paper, max_total_snippets
+        """
+        context_length = self.get_active_model_context_length()
+
+        # Define scaling tiers based on context window
+        # Format: (max_context, base_multiplier)
+        tiers = [
+            (1000000, 5.0),   # XLarge: 1M+ tokens (Gemini 1.5 Pro)
+            (200000, 4.0),    # Large: 200k tokens (Claude Opus)
+            (100000, 3.0),    # Medium: 100k tokens (GPT-4 Turbo)
+            (32000, 2.0),     # Small-Med: 32k tokens (GPT-4)
+            (0, 1.0),         # Default: Unknown/small context
+        ]
+
+        # Find appropriate tier
+        multiplier = 1.0
+        if context_length:
+            for threshold, mult in tiers:
+                if context_length >= threshold:
+                    multiplier = mult
+                    break
+
+        # Base limits (conservative for small-context models)
+        if is_focused:
+            base = {
+                "retrieval_k": 25,
+                "rerank_top_k": 15,
+                "max_snippets_per_paper": 8,
+                "max_total_snippets": 10,
+            }
+        else:
+            base = {
+                "retrieval_k": 15,
+                "rerank_top_k": 10,
+                "max_snippets_per_paper": 3,
+                "max_total_snippets": 6,
+            }
+
+        # Scale limits by multiplier
+        scaled = {
+            "retrieval_k": int(base["retrieval_k"] * multiplier),
+            "rerank_top_k": int(base["rerank_top_k"] * multiplier),
+            "max_snippets_per_paper": int(base["max_snippets_per_paper"] * multiplier),
+            "max_total_snippets": int(base["max_total_snippets"] * multiplier),
+        }
+
+        # Log for debugging
+        provider_id = self.provider_manager.active_provider_id
+        model_id = self.provider_manager.get_active_model()
+        logger.info(
+            f"Retrieval limits for {provider_id}/{model_id} "
+            f"(context: {context_length or 'unknown'}): {scaled}"
+        )
+
+        return scaled
+
     def _index_library_worker(self):
         try:
             start_time = time.time()
@@ -692,9 +784,11 @@ class ZoteroChatbot:
         # Use hybrid search (dense + sparse) for best results
         search_prompt = self.build_search_prompt(retrieval_query)  # Use condensed query!
 
-        # Retrieve more candidates when filters are active (narrower corpus → go deeper)
-        retrieval_k = 25 if db_filter else 15
-        rerank_top_k = 15 if db_filter else 10
+        # Get dynamic retrieval limits based on model's context window
+        is_focused_query_prelim = db_filter is not None
+        limits = self.get_retrieval_limits(is_focused=is_focused_query_prelim)
+        retrieval_k = limits["retrieval_k"]
+        rerank_top_k = limits["rerank_top_k"]
 
         if use_rrf:
             # Use RRF hybrid search for better fusion
@@ -744,8 +838,13 @@ class ZoteroChatbot:
         #   2. Results naturally concentrated in ≤2 papers (semantically focused query)
         unique_papers = {meta.get("title") for meta in metas if meta.get("title")}
         is_focused_query = db_filter is not None or len(unique_papers) <= 2
-        max_snippets_per_paper = 8 if is_focused_query else 3
-        max_total_snippets = 10 if is_focused_query else 6
+
+        # Recalculate limits if focus mode changed (rare but possible)
+        if is_focused_query != is_focused_query_prelim:
+            limits = self.get_retrieval_limits(is_focused=is_focused_query)
+
+        max_snippets_per_paper = limits["max_snippets_per_paper"]
+        max_total_snippets = limits["max_total_snippets"]
 
         # Build snippets and citation map with page numbers
         snippets = []

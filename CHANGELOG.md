@@ -7,9 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-02-20
+
+### Added
+
+- **Provider-Aware Dynamic Retrieval Limits**: Retrieval caps now scale automatically based on active model's context window
+  - Five scaling tiers: 1.0x (default/unknown), 2.0x (32k), 3.0x (100k), 4.0x (200k), 5.0x (1M+)
+  - Maximizes utility of large-context models (Gemini 1.5 Pro, Claude Opus, GPT-4 Turbo)
+  - Maintains conservative defaults for local models without known context limits (Ollama, LM Studio)
+  - Preserves broad/focused mode distinction for diversity control
+  - Example: Gemini 1.5 Pro (2M context) retrieves 30-50 snippets instead of 6-10
+  - Example: Claude Opus (200k context) retrieves 24-40 snippets instead of 6-10
+  - Backward compatible: Unknown context defaults to 1.0x multiplier (no change for Ollama)
+
+### Changed
+
+- Retrieval pipeline now queries provider for model context_length on first chat
+- Updated Technical Details section in README to reflect dynamic scaling behavior
+
+### Technical
+
+- Added `get_active_model_context_length()` method to query provider capabilities
+- Added `get_retrieval_limits(is_focused)` method with tiered scaling logic
+- Comprehensive test suite with 13 tests covering all scaling tiers and edge cases
+
 ## [0.4.1] - 2026-02-20
 
 ### Fixed
+
 - **Linux Remote Desktop Support**: Fixed renderer crashes when launching from desktop menu in Remote Desktop environments
   - Added `--disable-gpu-sandbox` flag to desktop launcher for GPU/sandbox compatibility
   - Increased backend startup timeout from 10s to 30s for slower Remote Desktop sessions
