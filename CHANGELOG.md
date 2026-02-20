@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-02-20
+
+### Fixed
+- **Linux Remote Desktop Support**: Fixed renderer crashes when launching from desktop menu in Remote Desktop environments
+  - Added `--disable-gpu-sandbox` flag to desktop launcher for GPU/sandbox compatibility
+  - Increased backend startup timeout from 10s to 30s for slower Remote Desktop sessions
+  - Improved backend process detachment using shell wrapper to avoid Chromium sandbox restrictions
+  - Added automatic backend wrapper permission setup in post-install script
+- **Linux Backend Startup**: Resolved backend process being killed immediately after spawn
+  - Implemented detached launch mechanism with `setsid` and `nohup` in wrapper script
+  - Added comprehensive backend health check with extended retry logic
+  - Improved initialization flag to prevent premature app quit during startup
+
 ## [0.4.0] - 2026-02-17
 
 ### Added

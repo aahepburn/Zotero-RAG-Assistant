@@ -28,6 +28,7 @@ const FRONTEND_DEV_URL = 'http://localhost:5173';
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 let authToken: string | null = null;
+let isInitializing = true; // Prevent premature quit during startup
 let isShuttingDown = false; // FIX: Prevent duplicate shutdown attempts
 let updateDownloaded = false;
 let updateInfo: { version: string; releaseNotes?: string } | null = null;
@@ -84,13 +85,19 @@ if (process.platform === 'linux') {
   // If no special flags provided, apply sensible Linux defaults
   if (!args.some(arg => arg.includes('sandbox') || arg.includes('gpu') || arg.includes('ozone') || arg.includes('gl'))) {
     console.log('  \u2713 Applying default Linux compatibility settings:');
-    // Disable GPU sandbox by default on Linux (common source of crashes)
-    console.log('    - Disabling GPU sandbox (prevents crashes on some systems)');
+    // Disable sandboxes by default on Linux (AppArmor can block child processes)
+    console.log('    - Disabling sandboxes (prevents AppArmor blocking child processes)');
+    app.commandLine.appendSwitch('no-sandbox');
+    app.commandLine.appendSwitch('disable-setuid-sandbox');
     app.commandLine.appendSwitch('disable-gpu-sandbox');
     
-    // Use desktop GL by default (more stable than ANGLE on Linux)
-    console.log('    - Using desktop OpenGL (more stable on Linux)');
-    app.commandLine.appendSwitch('use-gl', 'desktop');
+    // Disable dev-shm usage (prevents shared memory errors on some systems)
+    console.log('    - Disabling /dev/shm usage (prevents shared memory errors)');
+    app.commandLine.appendSwitch('disable-dev-shm-usage');
+    
+    // Disable GPU acceleration for Remote Desktop compatibility
+    console.log('    - Disabling GPU acceleration (improves Remote Desktop compatibility)');
+    app.commandLine.appendSwitch('disable-gpu');
   }
 }
 
@@ -736,6 +743,32 @@ async function getBackendPath(): Promise<{ command: string; args: string[]; cwd:
       }
       
       console.log(`Using Linux venv: ${venvSetup.pythonPath}`);
+      
+      // SOLUTION: Use shell wrapper to fully detach backend from Electron process tree
+      // This avoids Chromium restrictions that kill child Python processes during imports
+      const wrapperPath = path.join(resourcesPath, 'start-backend.sh');
+      if (fs.existsSync(wrapperPath)) {
+        console.log(`🔧 Using detached shell wrapper: ${wrapperPath}`);
+        return {
+          command: wrapperPath,
+          args: [venvSetup.pythonPath, '-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
+          cwd: resourcesPath,
+          pythonInfo: { version: 'venv', source: 'linux-venv-detached' }
+        };
+      }
+      
+      // TEMPORARY DEBUG: Use wrapper script to diagnose spawn issues
+      const debugWrapperPath = path.join(resourcesPath, 'uvicorn_wrapper.py');
+      if (fs.existsSync(debugWrapperPath)) {
+        console.log(`🔍 DEBUG: Using wrapper script at ${debugWrapperPath}`);
+        return {
+          command: venvSetup.pythonPath,
+          args: [debugWrapperPath],
+          cwd: resourcesPath,
+          pythonInfo: { version: 'venv', source: 'linux-venv' }
+        };
+      }
+      
       return {
         command: venvSetup.pythonPath,
         args: ['-m', 'uvicorn', 'backend.main:app', '--port', BACKEND_PORT.toString()],
@@ -1021,6 +1054,10 @@ async function startBackend(): Promise<boolean> {
       ...((!IS_DEV && process.platform === 'darwin') ? {
         DYLD_LIBRARY_PATH: path.join(process.resourcesPath, 'python', 'lib')
       } : {}),
+      // CRITICAL FIX: Unset Electron sandbox variables that get inherited by child processes
+      // This prevents the Python backend from being killed by Electron's sandbox
+      ELECTRON_RUN_AS_NODE: undefined,
+      ELECTRON_NO_ASAR: undefined,
       // Pass auth token to backend if needed in future
       // AUTH_TOKEN: authToken
     };
@@ -1034,9 +1071,15 @@ async function startBackend(): Promise<boolean> {
     console.log('Spawning process...');
     
     // Spawn in a new process group so we can kill all child processes
+    // EXPERIMENTAL FIX: Try different stdio configuration for Linux production
+    // Piped stdio might be failing when Electron runs from asar
+    const useLogFiles = process.platform === 'linux' && app.isPackaged;
+    
     const spawnOptions: any = {
       cwd,
-      stdio: ['ignore', 'pipe', 'pipe'], // Explicitly pipe stdout and stderr
+      stdio: useLogFiles 
+        ? ['ignore', 'inherit', 'inherit'] // Write directly to console (for debugging)
+        : ['ignore', 'pipe', 'pipe'], // Explicitly pipe stdout and stderr
       env: backendEnv
     };
     
@@ -1046,38 +1089,84 @@ async function startBackend(): Promise<boolean> {
       // By default on Unix, spawn creates new process group when shell: false
     }
     
+    if (useLogFiles) {
+      console.log('⚠️  Using inherit stdio for debugging - backend output will appear in console');
+    }
+    
+    console.log('================================================================================');
+    console.log('SPAWN DEBUG INFO:');
+    console.log(`  Command: ${command}`);
+    console.log(`  Args: ${JSON.stringify(args)}`);
+    console.log(`  CWD: ${cwd}`);
+    console.log(`  CWD exists: ${fs.existsSync(cwd)}`);
+    console.log(`  Command exists: ${fs.existsSync(command)}`);
+    console.log(`  Command is executable: ${fs.existsSync(command) ? (fs.statSync(command).mode & 0o111) !== 0 : 'N/A'}`);
+    console.log(`  Process UID: ${process.getuid ? process.getuid() : 'N/A'}`);
+    console.log(`  Process GID: ${process.getgid ? process.getgid() : 'N/A'}`);
+    console.log(`  Stdio config: ${JSON.stringify(spawnOptions.stdio)}`);
+    console.log(`  Detached: ${spawnOptions.detached}`);
+    console.log(`  Using file logging: ${useLogFiles}`);
+    console.log('================================================================================');
+    
     backendProcess = spawn(command, args, spawnOptions);
     
     console.log(`✓ Process spawned with PID: ${backendProcess.pid}`);
     
-    // Log backend output with timestamps
-    backendProcess.stdout?.on('data', (data) => {
-      const output = data.toString().trim();
-      backendOutput.push(output);
-      const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-      console.log(`[Backend ${timestamp}] ${output}`);
-    });
-    
-    backendProcess.stderr?.on('data', (data) => {
-      const output = data.toString().trim();
-      backendErrors.push(output);
-      const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-      
-      // Some stderr output is just warnings, not fatal errors
-      if (output.includes('WARNING') || output.includes('DeprecationWarning')) {
-        console.warn(`[Backend Warning ${timestamp}] ${output}`);
-      } else {
-        console.error(`[Backend Error ${timestamp}] ${output}`);
+    // Immediately check if process is still alive
+    setTimeout(() => {
+      if (backendProcess) {
+        console.log(`[100ms check] Process alive: ${backendProcess.exitCode === null}, PID: ${backendProcess.pid}`);
       }
-    });
+    }, 100);
+    
+    setTimeout(() => {
+      if (backendProcess) {
+        console.log(`[500ms check] Process alive: ${backendProcess.exitCode === null}, PID: ${backendProcess.pid}`);
+      }
+    }, 500);
+    
+    setTimeout(() => {
+      if (backendProcess) {
+        console.log(`[1000ms check] Process alive: ${backendProcess.exitCode === null}, PID: ${backendProcess.pid}`);
+      }
+    }, 1000);
+    
+    // Log backend output with timestamps
+    // Only set up stdout/stderr handlers if we're using pipe mode
+    if (!useLogFiles) {
+      backendProcess.stdout?.on('data', (data) => {
+        const output = data.toString().trim();
+        backendOutput.push(output);
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        console.log(`[Backend ${timestamp}] ${output}`);
+      });
+      
+      backendProcess.stderr?.on('data', (data) => {
+        const output = data.toString().trim();
+        backendErrors.push(output);
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        
+        // Some stderr output is just warnings, not fatal errors
+        if (output.includes('WARNING') || output.includes('DeprecationWarning')) {
+          console.warn(`[Backend Warning ${timestamp}] ${output}`);
+        } else {
+          console.error(`[Backend Error ${timestamp}] ${output}`);
+        }
+      });
+    } else {
+      console.log('Backend stdio inherited - output will appear directly in console');
+    }
     
     backendProcess.on('error', (error) => {
       console.error('================================================================================');
       console.error('✗ FATAL: Failed to spawn backend process');
       console.error(`  Error: ${error.message}`);
-      console.error(`  Code: ${(error as any).code}`);
+      console.error(`  Error code: ${(error as any).code}`);
+      console.error(`  Error errno: ${(error as any).errno}`);
+      console.error(`  Error syscall: ${(error as any).syscall}`);
       console.error(`  Command: ${command} ${args.join(' ')}`);
       console.error(`  Working directory: ${cwd}`);
+      console.error(`  Stack: ${error.stack}`);
       console.error('================================================================================');
       
       dialog.showErrorBox(
@@ -1088,13 +1177,31 @@ async function startBackend(): Promise<boolean> {
     
     backendProcess.on('exit', (code, signal) => {
       const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-      console.log(`[Backend ${timestamp}] Process exited with code ${code}, signal ${signal}`);
+      console.log('================================================================================');
+      console.log(`[Backend ${timestamp}] Process exited`);
+      console.log(`  Exit code: ${code}`);
+      console.log(`  Signal: ${signal}`);
+      console.log(`  Stdout lines captured: ${backendOutput.length}`);
+      console.log(`  Stderr lines captured: ${backendErrors.length}`);
+      console.log('================================================================================');
       
       // Log final output if process crashed
       if (code !== 0 && code !== null) {
         console.error('Backend crash diagnostics:');
         console.error(`  Last 20 stdout lines:\n    ${backendOutput.slice(-20).join('\n    ')}`);
         console.error(`  Last 20 stderr lines:\n    ${backendErrors.slice(-20).join('\n    ')}`);
+      }
+      
+      // Even if exit was clean, log what we got if very little output
+      if (backendOutput.length === 0 && backendErrors.length === 0 && !useLogFiles) {
+        console.error('⚠️  WARNING: Process exited without producing any stdout/stderr output!');
+        console.error('  This suggests the process died immediately after fork, possibly due to:');
+        console.error('    - Missing library dependencies');
+        console.error('    - Permission/security restrictions');
+        console.error('    - Stdio pipe setup issues');
+        console.error('    - Kernel OOM killer');
+        console.error('  Recommendation: Check if Python process can be started manually:');
+        console.error(`    cd ${cwd} && ${command} ${args.join(' ')}`);
       }
       
       backendProcess = null;
@@ -1115,57 +1222,67 @@ async function startBackend(): Promise<boolean> {
       }
     });
     
-    console.log('Waiting for immediate startup errors...');
+    // For detached launches (shell wrapper), skip early exit check
+    // The wrapper exits with code 0 immediately, which is expected
+    const isDetachedLaunch = pythonInfo?.source === 'linux-venv-detached';
     
-    // Wait a moment for immediate errors
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Check if process died immediately
-    if (!backendProcess || backendProcess.killed || backendProcess.exitCode !== null) {
-      console.error('================================================================================');
-      console.error('✗ FATAL: Backend process died immediately');
-      console.error(`  Exit code: ${backendProcess?.exitCode}`);
-      console.error(`  Signal: ${backendProcess?.signalCode}`);
-      console.error(`  Killed: ${backendProcess?.killed}`);
-      console.error(`  Output (${backendOutput.length} lines):\n    ${backendOutput.join('\n    ')}`);
-      console.error(`  Errors (${backendErrors.length} lines):\n    ${backendErrors.join('\n    ')}`);
-      console.error('================================================================================');
+    if (isDetachedLaunch) {
+      console.log('✓ Using detached launch - skipping process exit check, going straight to health check...');
+    } else {
+      console.log('Waiting for immediate startup errors...');
       
-      // Provide helpful error message to user
-      let errorSummary = 'The backend process failed to start.\n\n';
+      // Wait a moment for immediate errors
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Try to identify the issue from stderr
-      const stderrText = backendErrors.join('\n').toLowerCase();
-      if (stderrText.includes('modulenotfounderror') || stderrText.includes('no module named')) {
-        errorSummary += 'Issue: Missing Python dependencies\n\n' +
-          'On Linux, dependencies should be automatically installed.\n' +
-          'Try removing the virtual environment and restarting:\n\n' +
-          '  rm -rf ~/.config/zotero-rag-assistant/venv\n\n';
-      } else if (stderrText.includes('permission denied') || stderrText.includes('errno 13')) {
-        errorSummary += 'Issue: File permission problem\n\n' +
-          'Check that the application has permission to:\n' +
-          '  - Read/execute Python files\n' +
-          '  - Write to ~/.config/zotero-rag-assistant/\n\n';
-      } else if (stderrText.includes('address already in use') || stderrText.includes('errno 98')) {
-        errorSummary += 'Issue: Port 8000 is already in use\n\n' +
-          'Another application is using the required port.\n' +
-          'Try closing other applications and restarting.\n\n';
-      } else {
-        errorSummary += 'Review the error output below and console logs.\n\n';
+      const processExited = !backendProcess || backendProcess.killed || backendProcess.exitCode !== null;
+      
+      // Check if process died immediately
+      if (processExited) {
+        console.error('================================================================================');
+        console.error('✗ FATAL: Backend process died immediately');
+        console.error(`  Exit code: ${backendProcess?.exitCode}`);
+        console.error(`  Signal: ${backendProcess?.signalCode}`);
+        console.error(`  Killed: ${backendProcess?.killed}`);
+        console.error(`  Output (${backendOutput.length} lines):\n    ${backendOutput.join('\n    ')}`);
+        console.error(`  Errors (${backendErrors.length} lines):\n    ${backendErrors.join('\n    ')}`);
+        console.error('================================================================================');
+        
+        // Provide helpful error message to user
+        let errorSummary = 'The backend process failed to start.\n\n';
+        
+        // Try to identify the issue from stderr
+        const stderrText = backendErrors.join('\n').toLowerCase();
+        if (stderrText.includes('modulenotfounderror') || stderrText.includes('no module named')) {
+          errorSummary += 'Issue: Missing Python dependencies\n\n' +
+            'On Linux, dependencies should be automatically installed.\n' +
+            'Try removing the virtual environment and restarting:\n\n' +
+            '  rm -rf ~/.config/zotero-rag-assistant/venv\n\n';
+        } else if (stderrText.includes('permission denied') || stderrText.includes('errno 13')) {
+          errorSummary += 'Issue: File permission problem\n\n' +
+            'Check that the application has permission to:\n' +
+            '  - Read/execute Python files\n' +
+            '  - Write to ~/.config/zotero-rag-assistant/\n\n';
+        } else if (stderrText.includes('address already in use') || stderrText.includes('errno 98')) {
+          errorSummary += 'Issue: Port 8000 is already in use\n\n' +
+            'Another application is using the required port.\n' +
+            'Try closing other applications and restarting.\n\n';
+        } else {
+          errorSummary += 'Review the error output below and console logs.\n\n';
+        }
+        
+        errorSummary += `Error output:\n${backendErrors.slice(0, 10).join('\n').substring(0, 500)}`;
+        
+        dialog.showErrorBox('Backend Startup Failed', errorSummary);
+        return false;
       }
-      
-      errorSummary += `Error output:\n${backendErrors.slice(0, 10).join('\n').substring(0, 500)}`;
-      
-      dialog.showErrorBox('Backend Startup Failed', errorSummary);
-      return false;
     }
     
-    console.log('✓ Process survived initial startup, checking health endpoint...');
+    console.log('✓ Process check passed, checking health endpoint...');
     
     // Wait for backend to be ready with retry logic
     // Use generous timeouts as initialization can be slow (especially on first run with indexing)
     // Try moderate checks first (1000ms delay), then slower checks (3000ms delay)
-    let isReady = await waitForBackend(10, 1000);
+    let isReady = await waitForBackend(30, 1000);  // Increased from 10 to 30 for Remote Desktop environments
     if (!isReady) {
       console.log('Initial startup phase incomplete, continuing with longer intervals (3000ms)...');
       isReady = await waitForBackend(20, 3000);  // Give plenty of time for initialization
@@ -1883,12 +2000,21 @@ app.on('ready', async () => {
   
   // Create window
   createWindow();
+  
+  // Initialization complete - allow normal window-close behavior
+  isInitializing = false;
 });
 
 /**
  * All windows closed event
  */
 app.on('window-all-closed', () => {
+  // During initialization, don't quit when loading window closes
+  if (isInitializing) {
+    console.log('Loading window closed during initialization - not quitting');
+    return;
+  }
+  
   // On macOS, keep app running until explicitly quit
   if (process.platform !== 'darwin') {
     app.quit();

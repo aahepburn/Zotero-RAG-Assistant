@@ -1,7 +1,7 @@
 {
   "name": "zotero-rag-assistant",
   "productName": "ZoteroRAG",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "AI-powered research assistant for your Zotero library",
   "main": "dist/electron/main.js",
   "author": {
@@ -201,6 +201,10 @@
         {
           "from": "build/linux-postinstall.sh",
           "to": "../linux-postinstall.sh"
+        },
+        {
+          "from": "scripts/start-backend.sh",
+          "to": "start-backend.sh"
         }
       ],
       "target": [
