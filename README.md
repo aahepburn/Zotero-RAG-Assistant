@@ -40,34 +40,29 @@ Install [Zotero](https://www.zotero.org/download/) and sync your library:
   - **Windows:** `C:\Users\{username}\Zotero\zotero.sqlite`
   - **Linux:** `~/Zotero/zotero.sqlite`
 
-### 2. Ollama (for local LLM support)
+### 2. Language Model (Local or Cloud)
 
-Install [Ollama](https://ollama.com/) to run language models locally:
+#### Option A: Local Models (No API key needed)
 
+Choose either Ollama or LM Studio to run models locally on your machine:
+
+**Ollama** (recommended):
 ```bash
 # macOS/Linux - Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Or download from: https://ollama.com/download
-```
-
-**Download models:**
-```bash
-# Recommended chat models (choose one based on your hardware)
+# Download a model
 ollama pull llama3.2       # Lightweight, fast (1B or 3B)
 ollama pull llama3.1:8b    # Good balance of speed and quality
-ollama pull qwen2.5:7b     # Strong alternative to Llama
 ```
 
-**Note:** The app uses SentenceTransformers for embeddings (downloaded automatically on first use), not Ollama embedding models.
+**LM Studio**: Download from [lmstudio.ai](https://lmstudio.ai), load a model, and start the local server (default port: 1234).
 
-**Verify installation:**
-```bash
-ollama list
-# Should show downloaded models
-```
+**Note:** The app uses SentenceTransformers for embeddings (downloaded automatically on first use), not Ollama/LM Studio embedding models.
 
-**Alternative:** You can also use cloud providers (OpenAI, Anthropic, Google) by configuring API keys in the app settings.
+#### Option B: Cloud Providers (API key required)
+
+Configure API keys in Settings for: **OpenAI**, **Anthropic**, **Google**, **Mistral**, **Groq**, or **OpenRouter**. See [Provider Setup Guide](docs/provider_guide.md) for where to get API keys.
 
 
 ## Installation
@@ -171,17 +166,31 @@ See [docs/DESKTOP_APP.md](docs/DESKTOP_APP.md) for detailed development instruct
    - Linux: `~/Zotero/zotero.sqlite`
 
 2. **Choose an LLM Provider**:
-   - **Ollama** (recommended for local use): Install from [ollama.com](https://ollama.com), then run `ollama pull llama3.2` or another model
-   - **OpenAI, Anthropic, etc.**: Add your API key in Settings
+   - **Local (No API key)**: Ollama or LM Studio - install and load a model
+   - **Cloud (API key required)**: OpenAI, Anthropic, Google, Mistral, Groq, or OpenRouter - add API key in Settings
+   - See [Provider Setup Guide](docs/provider_guide.md) for detailed instructions and API key locations
 
-3. **Index Your Library**: Click "Index Library" to process your PDFs. This creates embeddings for semantic search. Initial indexing may take a while depending on library size.
+3. **Index Your Library**: Click "Index Library" in the Library tab to process your PDFs. This creates embeddings for semantic search. Initial indexing may take a while depending on library size.
+
+4. **Optional - Choose Embedding Model**: In Settings, select from BGE-base (default, best quality), SPECTER (scientific papers), MiniLM-L6 (balanced), or MiniLM-L3 (fastest). Different models create separate indexes.
+
+**Note:** PDFs must contain selectable text. Scanned documents without OCR cannot be indexed.
 
 ### Using the App
 
-- Type questions in natural language: "What methods are used to study X?" or "Compare the arguments about Y in my readings"
-- View citations in the Evidence Panel to see which documents and pages were used
-- Click document titles to open them in Zotero or your PDF reader
-- Create multiple profiles if you work with different document collections
+The interface has three main tabs:
+
+- **Chat**: Type questions in natural language and view conversation history
+- **Library**: Index your PDFs and sync metadata from Zotero
+- **Prompts**: Use academic scaffolding templates and filter results by metadata (year, tags, collections)
+
+**Key features:**
+
+- View citations and source passages in the Evidence Panel
+- Click document titles to open in Zotero or your PDF reader
+- Filter retrieved documents by publication date, tags, collections, authors, or item types
+- Switch between providers and models anytime in Settings
+- Create multiple profiles for different research projects (see [Profile Guide](docs/profile_system_guide.md))
 
 ## Technical Details
 
