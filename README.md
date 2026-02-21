@@ -254,7 +254,7 @@ For complete build instructions, see [docs/BUILD_CHECKLIST.md](docs/BUILD_CHECKL
 
 ## License
 
-MIT
+Apache 2.0
 
 ## Contributing
 
